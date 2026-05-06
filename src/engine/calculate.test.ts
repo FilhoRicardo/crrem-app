@@ -5,9 +5,10 @@ import {
   blendPathway,
   applyRetrofitsForYear,
   findMisalignmentYear,
+  projectTrajectory,
   portfolioMetrics,
 } from './calculate'
-import type { EFProvider, PathwayProvider, TrajectoryPoint, EnergyMap } from './types'
+import type { Carrier, EFProvider, PathwayProvider, TrajectoryPoint, EnergyMap } from './types'
 
 // Fixture tolerances
 const CI_TOL = fixtures.tolerances.intensity_kgco2e_m2_yr   // 0.5 kgCO₂e/m²/yr
@@ -199,6 +200,17 @@ describe('applyRetrofitsForYear', () => {
     expect(applyRetrofitsForYear(base, retrofits, 2029).Elec_Grid).toBe(1_000)
     expect(applyRetrofitsForYear(base, retrofits, 2030).Elec_Grid).toBe(500)
   })
+
+  test('multiple retrofits in same year all apply (compound, not additive)', () => {
+    // Real-world: LED + BMS in one capex round, both active from 2025
+    const retrofits = [
+      { id: 'r1', year: 2025, name: 'LED', impacts: [{ carrier: 'Elec_Grid' as const, operation: 'reduce' as const, mode: 'percent' as const, value: 20 }] },
+      { id: 'r2', year: 2025, name: 'BMS', impacts: [{ carrier: 'Elec_Grid' as const, operation: 'reduce' as const, mode: 'percent' as const, value: 10 }] },
+    ]
+    const e = applyRetrofitsForYear(base, retrofits, 2025)
+    // 1000 × (1 - 0.20) × (1 - 0.10) = 1000 × 0.80 × 0.90 = 720 (compounding, not 700)
+    expect(e.Elec_Grid).toBeCloseTo(720, 5)
+  })
 })
 
 // ─── findMisalignmentYear ────────────────────────────────────────────────────
@@ -231,6 +243,53 @@ describe('findMisalignmentYear', () => {
     const { co2, eui } = findMisalignmentYear(always_below)
     expect(co2).toBeNull()
     expect(eui).toBeNull()
+  })
+})
+
+// ─── projectTrajectory ───────────────────────────────────────────────────────
+
+describe('projectTrajectory', () => {
+  test('A-004 (Sydney): full 2024–2050 CI trajectory matches fixture within tolerance', () => {
+    // A-004 is all-electric + renewables — only one EF to derive.
+    // Net_CO2(year) = (Elec_Grid − Renew_Exported) × EF_Elec(year)
+    //               = (1_400_000 − 180_000) × EF_Elec(year) = 1_220_000 × EF_Elec(year)
+    // → EF_Elec(year) = fixture_CI(year) × GIA / (Elec_Grid − Renew_Exported)
+    const { years, asset_curve_kgco2e_m2_yr, pathway_curve_kgco2e_m2_yr } = A004.trajectories
+    const efByYear: Record<number, number> = {}
+    years.forEach((yr, i) => {
+      efByYear[yr] = (asset_curve_kgco2e_m2_yr[i] * 15_000) / 1_220_000
+    })
+
+    const getEF: EFProvider = (carrier: Carrier, _region, year) =>
+      carrier === 'Elec_Grid' ? (efByYear[year] ?? 0) : 0
+
+    const getPathway: PathwayProvider = (_region, _type, year) => {
+      const i = years.indexOf(year)
+      return { carbon_kgco2e_m2: pathway_curve_kgco2e_m2_yr[i] ?? 0, eui_kwh_m2: 0 }
+    }
+
+    const traj = projectTrajectory({
+      baseEnergy: { Elec_Grid: 1_400_000, Renew_Consumed: 280_000, Renew_Exported: 180_000 },
+      gia: 15_000,
+      getEF,
+      getPathway,
+      region: 'NSW',
+      split: [{ propertyType: 'Distribution Warehouse Warm', fraction: 1 }],
+      retrofits: [],
+      startYear: 2024,
+      endYear: 2050,
+    })
+
+    // Every year's CI must be within ±0.5 of the fixture
+    traj.forEach((p, i) => {
+      expect(
+        within(p.metrics.carbon_intensity_kgco2e_m2, asset_curve_kgco2e_m2_yr[i], CI_TOL),
+        `CI mismatch in year ${p.year}: got ${p.metrics.carbon_intensity_kgco2e_m2.toFixed(3)}, expected ${asset_curve_kgco2e_m2_yr[i]}`,
+      ).toBe(true)
+    })
+
+    // Misalignment year must be exact
+    expect(findMisalignmentYear(traj).co2).toBe(A004.summary.misalignment_year)
   })
 })
 
