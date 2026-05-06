@@ -17,6 +17,24 @@ The project has:
 
 ---
 
+## Engineering review findings (applied 2026-05-06)
+
+These gaps were found during `/plan-eng-review` and are patched into the steps below. Read before starting.
+
+| # | Severity | Finding | Where fixed |
+|---|----------|---------|-------------|
+| 1 | **BLOCKING** | Hardcoded EF/pathway values unspecified in Step 5b | Added `stubProviders.ts` spec below |
+| 2 | **BLOCKING** | No ECM .md file in sample vault — Step 5e verify fails | Added to Step 3 |
+| 3 | **BLOCKING** | `jszip` not in deps — ECM .zip import can't work | Noted in Step 5e |
+| 4 | **MAJOR** | Firefox and iOS Safari have zero `showDirectoryPicker` support | Browser guard added to Step 5a |
+| 5 | **MAJOR** | `parent_scenario_id` branching logic undefined — silently wrong | Clarified in Step 5d |
+| 6 | **MAJOR** | No frontmatter validation — silent failures on bad vault files | Noted in Step 2 |
+| 7 | **MINOR** | `writeScenario` needs debounce — fires on keystroke, not on close | Clarified in Step 5c |
+| 8 | **MINOR** | `vaultDir` in Zustand is non-serialisable | Comment added to store code |
+| 9 | **MINOR** | `"xlsx": "^0.18.5"` should be exact-pinned | Noted in Step 6 |
+
+---
+
 ## Step 1 — Verify the calc engine (gate: must pass before any other work)
 
 ```bash
@@ -121,9 +139,26 @@ export function parseFrontmatter(content: string): { data: Record<string, unknow
 }
 ```
 
+### Frontmatter validation (gap #6)
+
+Do not silently cast frontmatter to `Asset`. Validate required fields and surface errors:
+
+```typescript
+// After parsing, validate each asset:
+const required = ['id', 'name', 'country', 'property_type', 'gia_m2', 'reporting_year']
+for (const field of required) {
+  if (!data[field]) throw new Error(`Asset in ${filename}: missing required field "${field}"`)
+}
+if (typeof data.gia_m2 !== 'number' || data.gia_m2 <= 0) {
+  throw new Error(`Asset in ${filename}: gia_m2 must be a positive number`)
+}
+```
+
+Add `loadErrors: string[]` to the Zustand store (see Step 4). Surface errors in the sidebar as a ⚠ banner. Never silently drop a file.
+
 ### Verification for Step 2
 
-Create a sample vault at `public/sample-vault/` (see Step 3 — do this first, then use it to verify the loader manually in the dev server).
+Create a sample vault at `public/sample-vault/` (see Step 3 — **do Step 3 first**, then use it to verify the loader manually in the dev server).
 
 ---
 
@@ -234,9 +269,36 @@ weighting: gia
 Single-asset portfolio for demonstration.
 ```
 
+### `public/sample-vault/ecms/led-lighting-upgrade.md`
+
+Required for Step 5e verification (gap #2):
+
+```markdown
+---
+doc_type: ecm
+ecm_schema: "1.0"
+id: led-lighting-upgrade
+name: LED Lighting Upgrade
+category: Lighting
+impacts:
+  - carrier: Elec_Grid
+    operation: reduce
+    mode: percent
+    value_low: 12
+    value_typical: 18
+    value_high: 25
+payback_years_range: [4, 7]
+notes: Replace fluorescent/halogen with LED throughout. Savings depend on hours of use.
+---
+
+# LED Lighting Upgrade
+
+Full-building LED retrofit. Typically reduces grid electricity by 15–20% depending on existing lamp stock and operational hours.
+```
+
 ### Verification for Step 3
 
-Load the sample vault in the running dev server (`npm run dev`). Confirm the loader reads all 3 files without errors. Check browser console.
+Run `npm run dev`. In Chrome, click "Open Vault" and navigate to `<repo>/public/sample-vault/` on disk (not the served URL — the FSA API reads the local filesystem). Confirm the loader reads **4 files** (1 asset, 2 scenarios, 1 portfolio, 1 ECM) without errors in the browser console.
 
 ---
 
@@ -266,14 +328,19 @@ interface AppState {
   toggleScenario: (id: string) => void
 }
 
+// Add loadErrors to AppState interface:
+//   loadErrors: string[]
+//   setLoadErrors: (errors: string[]) => void
+
 export const useStore = create<AppState>((set) => ({
-  vaultDir: null,
+  vaultDir: null,  // non-serialisable FileSystemDirectoryHandle — do NOT add persist middleware
   assets: [],
   scenarios: [],
   ecms: [],
   portfolios: [],
   selectedAssetId: null,
   activeScenarioIds: [],
+  loadErrors: [],
 
   setVaultDir: (dir) => set({ vaultDir: dir }),
   setAssets: (assets) => set({ assets }),
@@ -301,8 +368,68 @@ Replace `src/App.tsx` with:
 - Header (already there)
 - If no vault loaded: centred "Open Vault" button → calls `requestVaultDirectory()` → loads all entities into store
 - If vault loaded: two-column layout — sidebar (asset list) + main area (chart/detail)
+- Wrap the vault-loaded layout in a React `<ErrorBoundary>` that shows a friendly error card (not a white screen) if any loader throws.
 
-**Verify:** Click "Open Vault", point at `public/sample-vault/`, asset list appears in sidebar.
+**Browser guard (gap #4):** `showDirectoryPicker` is **Chrome/Edge desktop only** — Firefox and all iOS browsers will crash. Add this check before rendering the Open Vault button:
+
+```tsx
+const fsaSupported = 'showDirectoryPicker' in window
+// If !fsaSupported, show:
+// "This app requires Chrome or Edge on desktop. Firefox and Safari are not supported."
+```
+
+**Verify:** Click "Open Vault", point at `<repo>/public/sample-vault/` on disk, asset list appears in sidebar. Any bad .md files show a ⚠ banner (from `loadErrors`), not a crash.
+
+### 5b-pre. Create `src/engine/stubProviders.ts` (gap #1)
+
+Write this file first. It provides the EFProvider and PathwayProvider for Steps 5b–5f until the real xlsx loaders are built in Step 6. Delete the file after Step 6 is working.
+
+```typescript
+// src/engine/stubProviders.ts
+// Development-only stub providers. Reproduce fixture CIs within ±0.01 kgCO₂e/m².
+// EF values source: calculate.test.ts. Pathway source: worked-examples-fixtures-v1.0.json.
+// DELETE this file after Step 6 (real xlsx loaders) is complete.
+
+import type { EFProvider, PathwayProvider } from './types'
+import fixtures from '../../references/worked-examples-fixtures-v1.0.json'
+
+// 2024 EF values — static (do not vary by year). Grid EF decline is ignored until Step 6.
+// Values chosen to reproduce all 4 fixture asset CIs exactly (see calculate.test.ts).
+const STATIC_EF: Partial<Record<string, number>> = {
+  Elec_Grid: 0.237,           // USA NY — A-001
+  District_Heating: 0.20431,  // CRREM UK baseline
+  District_Cooling: 0.38,     // HK — A-002
+  Gas: 0.18316,               // universal (A-002, A-003)
+  Oil: 0.26515,               // CRREM standard
+  Biomass: 0.01550,           // CRREM standard
+}
+
+export const stubEF: EFProvider = (carrier, _region, _year) =>
+  STATIC_EF[carrier] ?? 0
+
+// Pathway: pull values for Midtown Tower (USA Office) directly from the fixture.
+// This covers the sample vault. Other assets need the real xlsx (Step 6).
+const A001 = fixtures.assets[0]  // Midtown Tower
+type PathwayEntry = { carbon: number; eui: number }
+const midtownPathway = new Map<number, PathwayEntry>(
+  A001.trajectories.years.map((yr: number, i: number) => [
+    yr,
+    {
+      carbon: A001.trajectories.pathway_curve_kgco2e_m2_yr[i],
+      eui: 0,  // EUI pathway not in fixture — add from xlsx at Step 6
+    },
+  ])
+)
+
+export const stubPathway: PathwayProvider = (_region, _propertyType, year) => {
+  const p = midtownPathway.get(year)
+  return p
+    ? { carbon_kgco2e_m2: p.carbon, eui_kwh_m2: p.eui }
+    : { carbon_kgco2e_m2: 0, eui_kwh_m2: 0 }
+}
+```
+
+Pass `stubEF` and `stubPathway` as props throughout Steps 5b–5f. Replace with real providers in Step 6.
 
 ### 5b. StrandingChart (most important component)
 
@@ -311,8 +438,8 @@ File: `src/components/StrandingChart.tsx`
 Inputs (props):
 - `asset: Asset`
 - `scenarios: Scenario[]` (all scenarios for this asset — draw one line per scenario)
-- `getEF: EFProvider` — for now, hard-code 2024 EF values from the fixture (real xlsx loading comes later)
-- `getPathway: PathwayProvider` — same, hard-code fixture pathway values for now
+- `getEF: EFProvider` — pass `stubEF` from `stubProviders.ts` until Step 6
+- `getPathway: PathwayProvider` — pass `stubPathway` from `stubProviders.ts` until Step 6
 
 The chart shows:
 - X axis: years 2024–2050
@@ -337,8 +464,9 @@ File: `src/components/Timeline.tsx`
   - "Add retrofit" button: form with carrier, operation, mode, value, name, capex
   - "Pick from ECM library" shortcut (hooks into Step 5e)
 - On save: update scenario in store + write back to vault via `writeScenario()`
+- **Write semantics (gap #7):** Save fires on drawer `onClose` or explicit "Save" button click — NOT on every `onChange` keystroke. If the drawer closes without an explicit save, prompt "Save changes?" Debouncing file writes to disk is essential.
 
-**Verify:** Click 2026 dot on "LED + Heat Pump" scenario → drawer shows the LED retrofit. Edit the value → chart re-renders with new trajectory.
+**Verify:** Click 2026 dot on "LED + Heat Pump" scenario → drawer shows the LED retrofit. Edit the value, click Save → chart re-renders with new trajectory.
 
 ### 5d. Scenario panel
 
@@ -347,6 +475,8 @@ File: `src/components/ScenarioPanel.tsx`
 - Lists all scenarios for the selected asset
 - Checkbox to toggle each on/off in the chart (calls `toggleScenario`)
 - "New scenario" button: name + "branch from" dropdown → creates new .md in vault
+  - **Branch semantics (gap #5):** "Branch from" **copies** the parent's `retrofits` array verbatim into the new scenario's .md frontmatter. No runtime inheritance — `projectTrajectory` only uses `scenario.retrofits`. The new file starts pre-populated so the user edits from a copy, not from zero.
+  - Set `parent_scenario_id` in the new file's frontmatter (for audit trail only — not used in computation).
 - "Delete" button (soft delete — moves to trash subfolder, never permanent delete)
 
 **Verify:** Create a new scenario, it appears in the chart overlay.
@@ -358,8 +488,9 @@ File: `src/components/ECMLibrary.tsx`
 - Filterable list of ECMs from vault (category, property type)
 - Click ECM → preview impacts
 - "Apply to year" button → pre-fills retrofit form in Timeline drawer with ECM's `value_typical`
-- Import button: pick a .md or .zip of .md files → parse + add to vault ecms/ folder
-- Export button: select ECMs → download as .zip
+- Import button: pick a `.md` file → parse + add to vault `ecms/` folder
+  - **MVP scope (gap #3):** `.zip` import requires `jszip` which is not in `package.json`. Scope MVP import to single `.md` files only. Add `.zip` support as a follow-up by running `npm install jszip @types/jszip` and handling the zip in the import handler.
+- Export button: select ECMs → download as `.md` files (zip export also deferred until jszip is added)
 
 **Verify:** Pick the LED ECM, apply to 2026, chart updates.
 
@@ -383,7 +514,11 @@ Until Step 5 is working with hardcoded EFs, keep the hardcoded values. Once the 
 - `src/vault/pathwayLoader.ts` — parses `references/pathways-v2.05.xlsx`, returns a `PathwayProvider`
 - `src/vault/postalCodeLoader.ts` — parses `references/postal-code-lookup-v2.05.xlsx`, maps postal code → CRREM region
 
-**Verify:** Re-run the 4 fixture assets through the full stack (xlsx EFs → calc engine → chart). All 4 misalignment years must still match exactly.
+**xlsx version note (gap #9):** `package.json` has `"xlsx": "^0.18.5"`. Change this to `"0.18.5"` (exact pin, no `^`). SheetJS 0.18.5 is the last MIT version; the `^` range is harmless today but exact pin is safer.
+
+**Delete `src/engine/stubProviders.ts`** once the real loaders are verified.
+
+**Verify:** Re-run the 4 fixture assets through the full stack (xlsx EFs → calc engine → chart). All 4 misalignment years must still match exactly. Then delete `stubProviders.ts`.
 
 ---
 
