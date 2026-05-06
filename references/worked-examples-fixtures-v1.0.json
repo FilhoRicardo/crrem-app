@@ -1,0 +1,1264 @@
+{
+  "$schema": "https://crrem.org/wp-content/uploads/crrem-library/worked-examples-fixtures.schema.json",
+  "name": "CRREM Worked Example Fixtures",
+  "version": "1.0",
+  "library_release": "2026-Q2",
+  "generated": "2026-05-06",
+  "publisher": {
+    "name": "CRREM Foundation",
+    "url": "https://crrem.org/"
+  },
+  "license": "Open-access · attribution required · See https://crrem.org/library/use-of-data/",
+  "description": "Reference fixtures for CRREM-aligned tool implementations. A tool that reproduces these outputs given these inputs has its core asset-level and portfolio-level calculations correct. Source: https://crrem.org/library/reference-implementations/",
+  "method_reference": {
+    "assessment_guide": "https://crrem.org/library/assessment-guide/",
+    "technical_blueprint": "https://crrem.org/library/technical-blueprint/",
+    "reference_implementations": "https://crrem.org/library/reference-implementations/",
+    "spec_markdown": "https://crrem.org/wp-content/uploads/crrem-library/blueprint.md",
+    "spec_schema": "https://crrem.org/wp-content/uploads/crrem-library/blueprint-schema.json",
+    "workbook_xlsx": "https://crrem.org/wp-content/uploads/crrem-library/worked-examples-v1.0.xlsx"
+  },
+  "scope": {
+    "asset_level_steps": [
+      {
+        "n": 1,
+        "id": "data_collection",
+        "title": "Asset-level data collection"
+      },
+      {
+        "n": 2,
+        "id": "total_energy_eui",
+        "title": "Total energy and EUI"
+      },
+      {
+        "n": 3,
+        "id": "match_emission_factors",
+        "title": "Match emission factors"
+      },
+      {
+        "n": 4,
+        "id": "calculate_carbon_intensity",
+        "title": "Calculate carbon intensity"
+      },
+      {
+        "n": 5,
+        "id": "select_pathway",
+        "title": "Select the CRREM pathway"
+      },
+      {
+        "n": 6,
+        "id": "determine_misalignment",
+        "title": "Determine the misalignment year"
+      }
+    ],
+    "portfolio_level_steps": [
+      {
+        "n": 1,
+        "id": "aggregate_inputs",
+        "title": "Aggregate constituent inputs"
+      },
+      {
+        "n": 2,
+        "id": "weight_intensities",
+        "title": "GIA-weight asset intensities"
+      },
+      {
+        "n": 3,
+        "id": "weight_pathways",
+        "title": "GIA-weight pathway curves"
+      },
+      {
+        "n": 4,
+        "id": "portfolio_misalignment",
+        "title": "Determine portfolio misalignment year"
+      }
+    ]
+  },
+  "tolerances": {
+    "intensity_kgco2e_m2_yr": 0.5,
+    "eui_kwh_m2_yr": 1.0,
+    "pathway_kgco2e_m2_yr": 0.5,
+    "misalignment_year_years": 0,
+    "note": "Implementation considered correct if every output value falls within the tolerance for its unit. Misalignment year must match exactly."
+  },
+  "assets": [
+    {
+      "id": "A-001",
+      "name": "Midtown Tower",
+      "city": "New York",
+      "country": "USA",
+      "property_type": "Office",
+      "reporting_year": 2024,
+      "steps": {
+        "step_1": {
+          "title": "Asset-level data collection",
+          "rows": [
+            {
+              "kind": "input",
+              "field": "Property_Type",
+              "unit": "—",
+              "value": "Office",
+              "note": "Must match CRREM property-type taxonomy exactly"
+            },
+            {
+              "kind": "input",
+              "field": "GIA",
+              "unit": "m²",
+              "value": 7500,
+              "note": "Gross Internal Area, whole-building, excluding indoor parking"
+            },
+            {
+              "kind": "input",
+              "field": "Elec_Grid",
+              "unit": "kWh/yr",
+              "value": 850000,
+              "note": "Whole-building grid electricity (landlord + tenant)"
+            },
+            {
+              "kind": "input",
+              "field": "District_Heating",
+              "unit": "kWh/yr",
+              "value": 680000,
+              "note": "Steam delivery from Con Edison"
+            },
+            {
+              "kind": "input",
+              "field": "Gas · Oil · Biomass · Renew_Consumed · Renew_Exported",
+              "unit": "kWh/yr",
+              "value": 0,
+              "note": "All zero for this asset"
+            }
+          ]
+        },
+        "step_2": {
+          "title": "Total energy and EUI",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "Total_Energy",
+              "unit": "kWh/yr",
+              "value": 1530000,
+              "note": "Sum of all carriers including Renew_Consumed; excludes Renew_Exported"
+            },
+            {
+              "kind": "output",
+              "field": "EUI (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 204,
+              "note": "Key output. Compared against CRREM EUI pathway in Step 5."
+            }
+          ]
+        },
+        "step_3": {
+          "title": "Match emission factors",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "EF_Electricity (2024)",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.237,
+              "note": "NY eGRID subregion NYSTc, 2024 row. Declines annually for forward projection."
+            },
+            {
+              "kind": "calc",
+              "field": "EF_District_Heating",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.20431,
+              "note": "Default steam EF. Replace with site-specific Con Edison Steam factor in practice."
+            }
+          ]
+        },
+        "step_4": {
+          "title": "Calculate carbon intensity",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "Total_CO₂_gross",
+              "unit": "kgCO₂/yr",
+              "value": 340428,
+              "note": "Sum across all carriers"
+            },
+            {
+              "kind": "calc",
+              "field": "Grid_Export_Credit",
+              "unit": "kgCO₂/yr",
+              "value": 0,
+              "note": "No on-site renewables exported for this asset"
+            },
+            {
+              "kind": "calc",
+              "field": "Net_CO₂",
+              "unit": "kgCO₂/yr",
+              "value": 340428,
+              "note": "Total gross − export credit"
+            },
+            {
+              "kind": "output",
+              "field": "Carbon_Intensity (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 45.39,
+              "note": "Key output. Compared against CRREM CO₂ pathway in Step 5."
+            }
+          ]
+        },
+        "step_5": {
+          "title": "Select the CRREM pathway",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CRREM_Region",
+              "unit": "—",
+              "value": "NYSTc_Mixed mild_4A",
+              "note": "ZIP 10005 → NYS eGRID subregion, ASHRAE climate zone 4A. Resolved via ZIP Code Lookup."
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 35.06,
+              "note": "Office pathway for NYSTc_Mixed mild_4A, 2024 value"
+            },
+            {
+              "kind": "calc",
+              "field": "EUI Pathway (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 143.72,
+              "note": "EUI pathway for the same region + property type"
+            }
+          ]
+        },
+        "step_6": {
+          "title": "Determine the misalignment year",
+          "rows": [
+            {
+              "kind": "output",
+              "field": "Misalignment_Year",
+              "unit": "year",
+              "value": 2024,
+              "note": "Key output. Already misaligned in the reporting year."
+            }
+          ]
+        }
+      },
+      "summary": {
+        "gia_m2": 7500,
+        "eui_kwh_m2_yr": 204.0,
+        "carbon_intensity_kgco2e_m2_yr": 45.39,
+        "co2_pathway_2024_kgco2e_m2_yr": 35.06,
+        "eui_pathway_2024_kwh_m2_yr": 143.72,
+        "misalignment_year": 2024
+      },
+      "trajectories": {
+        "unit": "kgCO2e/m2/yr",
+        "years": [
+          2024,
+          2025,
+          2026,
+          2027,
+          2028,
+          2029,
+          2030,
+          2031,
+          2032,
+          2033,
+          2034,
+          2035,
+          2036,
+          2037,
+          2038,
+          2039,
+          2040,
+          2041,
+          2042,
+          2043,
+          2044,
+          2045,
+          2046,
+          2047,
+          2048,
+          2049,
+          2050
+        ],
+        "asset_curve_kgco2e_m2_yr": [
+          45.39,
+          41.375,
+          37.36,
+          36.057,
+          34.754,
+          29.733,
+          24.712,
+          23.984,
+          23.255,
+          22.527,
+          21.798,
+          21.07,
+          20.561,
+          20.052,
+          19.542,
+          19.033,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524,
+          18.524
+        ],
+        "pathway_curve_kgco2e_m2_yr": [
+          35.056,
+          31.853,
+          28.595,
+          25.64,
+          22.866,
+          20.267,
+          17.762,
+          15.651,
+          13.609,
+          11.71,
+          9.945,
+          8.313,
+          6.789,
+          5.395,
+          4.217,
+          3.279,
+          2.531,
+          2.114,
+          1.8,
+          1.526,
+          1.289,
+          1.07,
+          0.913,
+          0.764,
+          0.633,
+          0.514,
+          0.401
+        ]
+      }
+    },
+    {
+      "id": "A-002",
+      "name": "Pacific Plaza Mall",
+      "city": "Hong Kong",
+      "country": "Hong Kong",
+      "property_type": "Shopping Center",
+      "reporting_year": 2024,
+      "steps": {
+        "step_1": {
+          "title": "Asset-level data collection",
+          "rows": [
+            {
+              "kind": "input",
+              "field": "Property_Type",
+              "unit": "—",
+              "value": "Shopping Center",
+              "note": "Must match CRREM property-type taxonomy exactly"
+            },
+            {
+              "kind": "input",
+              "field": "GIA",
+              "unit": "m²",
+              "value": 22000,
+              "note": "Gross Internal Area, whole-building, excluding indoor parking"
+            },
+            {
+              "kind": "input",
+              "field": "Elec_Grid",
+              "unit": "kWh/yr",
+              "value": 2800000,
+              "note": "Whole-building grid electricity (landlord + tenant)"
+            },
+            {
+              "kind": "input",
+              "field": "Gas",
+              "unit": "kWh/yr",
+              "value": 320000,
+              "note": "Food court hot water + backup heat"
+            },
+            {
+              "kind": "input",
+              "field": "District_Cooling",
+              "unit": "kWh/yr",
+              "value": 2000000,
+              "note": "Large refrigerated mall. EF reflects CLP/HEC-powered chiller plant"
+            },
+            {
+              "kind": "input",
+              "field": "Oil · District_Heating · Biomass · Renew_Consumed · Renew_Exported",
+              "unit": "kWh/yr",
+              "value": 0,
+              "note": "All zero for this asset"
+            }
+          ]
+        },
+        "step_2": {
+          "title": "Total energy and EUI",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "Total_Energy",
+              "unit": "kWh/yr",
+              "value": 5120000,
+              "note": "Sum of all carriers. District Cooling is counted as delivered energy."
+            },
+            {
+              "kind": "output",
+              "field": "EUI (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 232.73,
+              "note": "Key output. Compared against CRREM EUI pathway in Step 5."
+            }
+          ]
+        },
+        "step_3": {
+          "title": "Match emission factors",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "EF_Electricity (2024)",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.54535,
+              "note": "HK grid emission factor, 2024 row"
+            },
+            {
+              "kind": "calc",
+              "field": "EF_Gas",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.18316,
+              "note": "Constant combustion EF for natural gas"
+            },
+            {
+              "kind": "calc",
+              "field": "EF_District_Cooling (DC)",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.38,
+              "note": "Representative EF for CLP/HEC-powered chiller plant"
+            }
+          ]
+        },
+        "step_4": {
+          "title": "Calculate carbon intensity",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CO₂_Elec",
+              "unit": "kgCO₂e/yr",
+              "value": 1526991,
+              "note": "Elec_Grid × EF_Electricity"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂_Gas",
+              "unit": "kgCO₂e/yr",
+              "value": 58611,
+              "note": "Gas × EF_Gas"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂_DC",
+              "unit": "kgCO₂e/yr",
+              "value": 760000,
+              "note": "District Cooling × EF_DC"
+            },
+            {
+              "kind": "calc",
+              "field": "Total_CO₂_gross",
+              "unit": "kgCO₂/yr",
+              "value": 2345602,
+              "note": "Sum across all carriers"
+            },
+            {
+              "kind": "calc",
+              "field": "Grid_Export_Credit",
+              "unit": "kgCO₂/yr",
+              "value": 0,
+              "note": "No on-site renewables exported for this asset"
+            },
+            {
+              "kind": "calc",
+              "field": "Net_CO₂",
+              "unit": "kgCO₂/yr",
+              "value": 2345602,
+              "note": "Total gross − export credit"
+            },
+            {
+              "kind": "output",
+              "field": "Carbon_Intensity (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 106.62,
+              "note": "Key output. Compared against CRREM CO₂ pathway in Step 5."
+            }
+          ]
+        },
+        "step_5": {
+          "title": "Select the CRREM pathway",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CRREM_Region",
+              "unit": "—",
+              "value": "HK",
+              "note": "Hong Kong → CRREM HK region. No sub-national subdivision."
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 179.62,
+              "note": "Shopping Center, HK, 2024 value"
+            },
+            {
+              "kind": "calc",
+              "field": "EUI Pathway (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 340.35,
+              "note": "EUI pathway for the same region + property type"
+            }
+          ]
+        },
+        "step_6": {
+          "title": "Determine the misalignment year",
+          "rows": [
+            {
+              "kind": "output",
+              "field": "Misalignment_Year",
+              "unit": "year",
+              "value": 2036,
+              "note": "Key output. First year the asset’s projected CI exceeds the pathway."
+            }
+          ]
+        }
+      },
+      "summary": {
+        "gia_m2": 22000,
+        "eui_kwh_m2_yr": 232.73,
+        "carbon_intensity_kgco2e_m2_yr": 106.62,
+        "co2_pathway_2024_kgco2e_m2_yr": 179.62,
+        "eui_pathway_2024_kwh_m2_yr": 340.35,
+        "misalignment_year": 2036
+      },
+      "trajectories": {
+        "unit": "kgCO2e/m2/yr",
+        "years": [
+          2024,
+          2025,
+          2026,
+          2027,
+          2028,
+          2029,
+          2030,
+          2031,
+          2032,
+          2033,
+          2034,
+          2035,
+          2036,
+          2037,
+          2038,
+          2039,
+          2040,
+          2041,
+          2042,
+          2043,
+          2044,
+          2045,
+          2046,
+          2047,
+          2048,
+          2049,
+          2050
+        ],
+        "asset_curve_kgco2e_m2_yr": [
+          106.618,
+          96.535,
+          86.452,
+          76.368,
+          66.285,
+          56.202,
+          46.119,
+          45.673,
+          45.228,
+          44.782,
+          44.337,
+          43.891,
+          43.446,
+          43.001,
+          42.555,
+          42.11,
+          41.664,
+          41.219,
+          40.773,
+          40.328,
+          39.882,
+          39.437,
+          38.991,
+          38.546,
+          38.101,
+          37.655,
+          37.21
+        ],
+        "pathway_curve_kgco2e_m2_yr": [
+          179.62,
+          164.186,
+          148.243,
+          133.671,
+          119.85,
+          106.777,
+          94.019,
+          83.22,
+          72.644,
+          62.698,
+          53.359,
+          44.63,
+          36.379,
+          28.748,
+          22.24,
+          17.013,
+          12.812,
+          10.483,
+          8.723,
+          7.176,
+          5.828,
+          4.565,
+          3.657,
+          2.784,
+          2.011,
+          1.299,
+          0.619
+        ]
+      }
+    },
+    {
+      "id": "A-003",
+      "name": "Northgate Quarter",
+      "city": "London",
+      "country": "United Kingdom",
+      "property_type": "Mixed Use",
+      "reporting_year": 2024,
+      "steps": {
+        "step_1": {
+          "title": "Asset-level data collection",
+          "rows": [
+            {
+              "kind": "input",
+              "field": "Property_Type",
+              "unit": "—",
+              "value": "Mixed Use",
+              "note": "Must match CRREM property-type taxonomy exactly"
+            },
+            {
+              "kind": "input",
+              "field": "MU_Breakdown",
+              "unit": "% GIA",
+              "value": "65% Office / 35% Retail High Street",
+              "note": "Used in Step 5 to blend two CRREM pathways by GIA share"
+            },
+            {
+              "kind": "input",
+              "field": "GIA",
+              "unit": "m²",
+              "value": 12000,
+              "note": "Gross Internal Area, whole-building, excluding indoor parking"
+            },
+            {
+              "kind": "input",
+              "field": "Elec_Grid",
+              "unit": "kWh/yr",
+              "value": 1100000,
+              "note": "Whole-building grid electricity (landlord + tenant)"
+            },
+            {
+              "kind": "input",
+              "field": "Gas",
+              "unit": "kWh/yr",
+              "value": 480000,
+              "note": "Hot water + space heat"
+            },
+            {
+              "kind": "input",
+              "field": "Renew_Consumed",
+              "unit": "kWh/yr",
+              "value": 120000,
+              "note": "On-site PV generated and consumed on-site. EF = 0."
+            },
+            {
+              "kind": "input",
+              "field": "Renew_Exported",
+              "unit": "kWh/yr",
+              "value": 60000,
+              "note": "Exported to grid. Not in Total_Energy; used only for export credit."
+            },
+            {
+              "kind": "input",
+              "field": "Oil · District_Heating · District_Cooling · Biomass",
+              "unit": "kWh/yr",
+              "value": 0,
+              "note": "All zero for this asset"
+            }
+          ]
+        },
+        "step_2": {
+          "title": "Total energy and EUI",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "Total_Energy",
+              "unit": "kWh/yr",
+              "value": 1700000,
+              "note": "Sum includes Renew_Consumed (on-site PV used on-site); excludes Renew_Exported."
+            },
+            {
+              "kind": "output",
+              "field": "EUI (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 141.67,
+              "note": "Key output. Compared against CRREM EUI pathway in Step 5."
+            }
+          ]
+        },
+        "step_3": {
+          "title": "Match emission factors",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "EF_Electricity (2024)",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.1485,
+              "note": "UK grid emission factor, 2024 row"
+            },
+            {
+              "kind": "calc",
+              "field": "EF_Gas",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.18316,
+              "note": "Constant combustion EF for natural gas"
+            },
+            {
+              "kind": "calc",
+              "field": "EF_On-site Renewables",
+              "unit": "kgCO₂e/kWh",
+              "value": 0,
+              "note": "Always 0 by CRREM definition"
+            }
+          ]
+        },
+        "step_4": {
+          "title": "Calculate carbon intensity",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CO₂_Elec",
+              "unit": "kgCO₂e/yr",
+              "value": 163351,
+              "note": "Elec_Grid × EF_Electricity"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂_Gas",
+              "unit": "kgCO₂e/yr",
+              "value": 87917,
+              "note": "Gas × EF_Gas"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂_Renew",
+              "unit": "kgCO₂e/yr",
+              "value": 0,
+              "note": "On-site renewables consumed on-site. EF = 0."
+            },
+            {
+              "kind": "calc",
+              "field": "Total_CO₂_gross",
+              "unit": "kgCO₂/yr",
+              "value": 251268,
+              "note": "Sum across all carriers"
+            },
+            {
+              "kind": "calc",
+              "field": "Grid_Export_Credit",
+              "unit": "kgCO₂/yr",
+              "value": 8910,
+              "note": "Renew_Exported 60,000 × 0.14850 = 8,910. Cap = MIN(8,910, CO₂_Elec 163,351) → 8,910."
+            },
+            {
+              "kind": "calc",
+              "field": "Net_CO₂",
+              "unit": "kgCO₂/yr",
+              "value": 242358,
+              "note": "Total gross − export credit"
+            },
+            {
+              "kind": "output",
+              "field": "Carbon_Intensity (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 20.2,
+              "note": "Key output. Compared against CRREM CO₂ pathway in Step 5."
+            }
+          ]
+        },
+        "step_5": {
+          "title": "Select the CRREM pathway",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CRREM_Region",
+              "unit": "—",
+              "value": "UK",
+              "note": "London → UK CRREM region."
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway: Office, UK (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 35.689,
+              "note": "Weight 65% of GIA"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway: Retail High Street, UK (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 42.365,
+              "note": "Weight 35% of GIA"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 38.03,
+              "note": "Mixed-Use UK (65% Office + 35% Retail High Street), 2024 value"
+            },
+            {
+              "kind": "calc",
+              "field": "EUI Pathway (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 190.92,
+              "note": "EUI pathway for the same region + property type"
+            }
+          ]
+        },
+        "step_6": {
+          "title": "Determine the misalignment year",
+          "rows": [
+            {
+              "kind": "output",
+              "field": "Misalignment_Year",
+              "unit": "year",
+              "value": 2036,
+              "note": "Key output. First year the asset’s projected CI exceeds the pathway."
+            }
+          ]
+        }
+      },
+      "summary": {
+        "gia_m2": 12000,
+        "eui_kwh_m2_yr": 141.67,
+        "carbon_intensity_kgco2e_m2_yr": 20.2,
+        "co2_pathway_2024_kgco2e_m2_yr": 38.03,
+        "eui_pathway_2024_kwh_m2_yr": 190.92,
+        "misalignment_year": 2036
+      },
+      "trajectories": {
+        "unit": "kgCO2e/m2/yr",
+        "years": [
+          2024,
+          2025,
+          2026,
+          2027,
+          2028,
+          2029,
+          2030,
+          2031,
+          2032,
+          2033,
+          2034,
+          2035,
+          2036,
+          2037,
+          2038,
+          2039,
+          2040,
+          2041,
+          2042,
+          2043,
+          2044,
+          2045,
+          2046,
+          2047,
+          2048,
+          2049,
+          2050
+        ],
+        "asset_curve_kgco2e_m2_yr": [
+          20.197,
+          18.796,
+          17.396,
+          15.996,
+          14.596,
+          13.195,
+          11.795,
+          10.865,
+          10.385,
+          9.983,
+          9.738,
+          9.478,
+          9.106,
+          8.909,
+          8.873,
+          8.79,
+          8.653,
+          8.428,
+          8.371,
+          8.35,
+          8.289,
+          8.144,
+          8.068,
+          8.01,
+          7.976,
+          7.931,
+          7.92
+        ],
+        "pathway_curve_kgco2e_m2_yr": [
+          38.026,
+          34.938,
+          31.713,
+          28.748,
+          25.917,
+          23.221,
+          20.569,
+          18.317,
+          16.097,
+          13.996,
+          12.012,
+          10.147,
+          8.375,
+          6.727,
+          5.316,
+          4.18,
+          3.264,
+          2.758,
+          2.375,
+          2.037,
+          1.743,
+          1.466,
+          1.267,
+          1.075,
+          0.905,
+          0.748,
+          0.597
+        ]
+      }
+    },
+    {
+      "id": "A-004",
+      "name": "Eastfield Logistics Park",
+      "city": "Sydney",
+      "country": "Australia",
+      "property_type": "Distribution Warehouse Warm",
+      "reporting_year": 2024,
+      "steps": {
+        "step_1": {
+          "title": "Asset-level data collection",
+          "rows": [
+            {
+              "kind": "input",
+              "field": "Property_Type",
+              "unit": "—",
+              "value": "Distribution Warehouse Warm",
+              "note": "Must match CRREM property-type taxonomy exactly"
+            },
+            {
+              "kind": "input",
+              "field": "GIA",
+              "unit": "m²",
+              "value": 15000,
+              "note": "Gross Internal Area, whole-building, excluding indoor parking"
+            },
+            {
+              "kind": "input",
+              "field": "Elec_Grid",
+              "unit": "kWh/yr",
+              "value": 1400000,
+              "note": "Whole-building grid electricity. All thermal load served by heat pumps."
+            },
+            {
+              "kind": "input",
+              "field": "Renew_Consumed",
+              "unit": "kWh/yr",
+              "value": 280000,
+              "note": "On-site PV generated and consumed on-site. EF = 0."
+            },
+            {
+              "kind": "input",
+              "field": "Renew_Exported",
+              "unit": "kWh/yr",
+              "value": 180000,
+              "note": "Exported to grid. Cap applies (see Step 4)."
+            },
+            {
+              "kind": "input",
+              "field": "Gas · Oil · District_Heating · District_Cooling · Biomass",
+              "unit": "kWh/yr",
+              "value": 0,
+              "note": "All zero for this asset"
+            }
+          ]
+        },
+        "step_2": {
+          "title": "Total energy and EUI",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "Total_Energy",
+              "unit": "kWh/yr",
+              "value": 1680000,
+              "note": "Sum includes Renew_Consumed; excludes Renew_Exported. Heat pump + PV → all-electric operation."
+            },
+            {
+              "kind": "output",
+              "field": "EUI (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 112.0,
+              "note": "Key output. Compared against CRREM EUI pathway in Step 5."
+            }
+          ]
+        },
+        "step_3": {
+          "title": "Match emission factors",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "EF_Electricity (2024)",
+              "unit": "kgCO₂e/kWh",
+              "value": 0.66,
+              "note": "NSW grid emission factor, 2024 row (NCC Zone 6)"
+            },
+            {
+              "kind": "calc",
+              "field": "EF_On-site Renewables",
+              "unit": "kgCO₂e/kWh",
+              "value": 0,
+              "note": "Always 0 by CRREM definition"
+            }
+          ]
+        },
+        "step_4": {
+          "title": "Calculate carbon intensity",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CO₂_Elec",
+              "unit": "kgCO₂e/yr",
+              "value": 924000,
+              "note": "Elec_Grid × EF_Electricity"
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂_Renew",
+              "unit": "kgCO₂e/yr",
+              "value": 0,
+              "note": "On-site renewables consumed on-site. EF = 0."
+            },
+            {
+              "kind": "calc",
+              "field": "Total_CO₂_gross",
+              "unit": "kgCO₂/yr",
+              "value": 924000,
+              "note": "Sum across all carriers"
+            },
+            {
+              "kind": "calc",
+              "field": "Grid_Export_Credit",
+              "unit": "kgCO₂/yr",
+              "value": 118800,
+              "note": "Renew_Exported 180,000 × 0.66000 = 118,800. Cap = MIN(118,800, CO₂_Elec 924,000) → 118,800 (uncapped)."
+            },
+            {
+              "kind": "calc",
+              "field": "Net_CO₂",
+              "unit": "kgCO₂/yr",
+              "value": 805200,
+              "note": "Total gross − export credit"
+            },
+            {
+              "kind": "output",
+              "field": "Carbon_Intensity (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 53.68,
+              "note": "Key output. Compared against CRREM CO₂ pathway in Step 5."
+            }
+          ]
+        },
+        "step_5": {
+          "title": "Select the CRREM pathway",
+          "rows": [
+            {
+              "kind": "calc",
+              "field": "CRREM_Region",
+              "unit": "—",
+              "value": "NCC Zone 6",
+              "note": "Sydney postcode 2170 → NSW grid, NCC Climate Zone 6. Resolved via ZIP Code Lookup."
+            },
+            {
+              "kind": "calc",
+              "field": "CO₂ Pathway (2024)",
+              "unit": "kgCO₂e/m²/yr",
+              "value": 60.0,
+              "note": "Distribution Warehouse Warm, NCC Zone 6, 2024 value"
+            },
+            {
+              "kind": "calc",
+              "field": "EUI Pathway (2024)",
+              "unit": "kWh/m²/yr",
+              "value": 89.34,
+              "note": "EUI pathway for the same region + property type"
+            }
+          ]
+        },
+        "step_6": {
+          "title": "Determine the misalignment year",
+          "rows": [
+            {
+              "kind": "output",
+              "field": "Misalignment_Year",
+              "unit": "year",
+              "value": 2028,
+              "note": "Key output. First year the asset’s projected CI exceeds the pathway."
+            }
+          ]
+        }
+      },
+      "summary": {
+        "gia_m2": 15000,
+        "eui_kwh_m2_yr": 112.0,
+        "carbon_intensity_kgco2e_m2_yr": 53.68,
+        "co2_pathway_2024_kgco2e_m2_yr": 60.0,
+        "eui_pathway_2024_kwh_m2_yr": 89.34,
+        "misalignment_year": 2028
+      },
+      "trajectories": {
+        "unit": "kgCO2e/m2/yr",
+        "years": [
+          2024,
+          2025,
+          2026,
+          2027,
+          2028,
+          2029,
+          2030,
+          2031,
+          2032,
+          2033,
+          2034,
+          2035,
+          2036,
+          2037,
+          2038,
+          2039,
+          2040,
+          2041,
+          2042,
+          2043,
+          2044,
+          2045,
+          2046,
+          2047,
+          2048,
+          2049,
+          2050
+        ],
+        "asset_curve_kgco2e_m2_yr": [
+          53.68,
+          51.045,
+          48.41,
+          45.775,
+          43.14,
+          40.505,
+          37.87,
+          35.892,
+          34.017,
+          32.24,
+          30.556,
+          28.96,
+          27.447,
+          26.014,
+          24.655,
+          23.367,
+          22.147,
+          20.99,
+          19.893,
+          18.854,
+          17.869,
+          16.936,
+          16.051,
+          15.213,
+          14.418,
+          13.665,
+          12.951
+        ],
+        "pathway_curve_kgco2e_m2_yr": [
+          60.003,
+          55.479,
+          50.668,
+          46.211,
+          41.907,
+          37.763,
+          33.635,
+          30.115,
+          26.596,
+          23.23,
+          20.014,
+          16.958,
+          14.017,
+          11.251,
+          8.861,
+          6.92,
+          5.342,
+          4.472,
+          3.813,
+          3.226,
+          2.708,
+          2.216,
+          1.861,
+          1.514,
+          1.202,
+          0.911,
+          0.628
+        ]
+      }
+    }
+  ],
+  "portfolio": {
+    "id": "PORTFOLIO",
+    "name": "Four-asset portfolio",
+    "weighting": "GIA",
+    "constituents": [
+      "A-001",
+      "A-002",
+      "A-003",
+      "A-004"
+    ],
+    "summary": {
+      "gia_m2": 56500,
+      "eui_kwh_m2_yr": 177.52,
+      "carbon_intensity_kgco2e_m2_yr": 66.08,
+      "co2_pathway_2024_kgco2e_m2_yr": 98.6,
+      "eui_pathway_2024_kwh_m2_yr": 215.87,
+      "misalignment_year_co2": 2034,
+      "misalignment_year_eui": 2028
+    }
+  },
+  "validation": {
+    "how_to_use": "For each asset: feed the Step 1 inputs into your implementation, walk Steps 2-6 using the methodology in the Assessment Guide and Technical Blueprint, compare each computed value against the per-step `value` fields and the `summary` block. The portfolio block exercises Steps 1-4 of the portfolio methodology against four-asset rollup.",
+    "regression_checklist": [
+      "Step 2 - computed EUI within tolerance of asset.summary.eui_kwh_m2_yr",
+      "Step 3 - emission-factor lookups match Step 3 row values",
+      "Step 4 - carbon intensity within tolerance of asset.summary.carbon_intensity_kgco2e_m2_yr",
+      "Step 5 - pathway lookup returns asset.summary.co2_pathway_2024_kgco2e_m2_yr and asset.summary.eui_pathway_2024_kwh_m2_yr",
+      "Step 6 - projected misalignment year exactly equals asset.summary.misalignment_year",
+      "Portfolio - GIA-weighted intensities and pathways match portfolio.summary; misalignment_year_co2 and misalignment_year_eui exact match"
+    ]
+  }
+}

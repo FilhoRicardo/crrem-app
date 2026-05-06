@@ -1,0 +1,486 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crrem.org/library/technical-blueprint/schema.json",
+  "title": "CRREM Technical Blueprint \u2014 Asset Input",
+  "version": "1.0",
+  "description": "Input data model for a single asset in a CRREM-aligned assessment tool. Every required field must be present. Conditional fields apply based on Country (Postal_Code for USA/CAN/AUS) and Property_Type (MU_* for Mixed Use).",
+  "type": "object",
+  "properties": {
+    "Asset_Name": {
+      "description": "Free-text label.",
+      "x-unit": "\u2014",
+      "x-group": "identification",
+      "x-required": "required",
+      "type": "string"
+    },
+    "Asset_ID": {
+      "description": "Unique identifier per asset.",
+      "x-unit": "\u2014",
+      "x-group": "identification",
+      "x-required": "optional",
+      "type": "string"
+    },
+    "GAV": {
+      "description": "Gross Asset Value. Not used in intensity calculations. Must be entered in a consistent currency across all assets in a portfolio.",
+      "x-unit": "currency",
+      "x-group": "identification",
+      "x-required": "optional",
+      "type": "number"
+    },
+    "Country": {
+      "description": "Country name. Must match Pathways and Emission Factors sheets exactly. For USA, Canada, Australia, Country alone is not sufficient \u2014 Postal_Code is also required.",
+      "x-unit": "\u2014",
+      "x-group": "location",
+      "x-required": "required",
+      "type": "string"
+    },
+    "Postal_Code": {
+      "description": "Required only for countries with sub-national pathways (USA, CAN, AUS). Store as text to preserve leading zeros. Resolved via Postal Code Lookup in Step 5.1.",
+      "x-unit": "text",
+      "x-group": "location",
+      "x-required": "conditional",
+      "type": "string",
+      "pattern": "^.+$"
+    },
+    "Property_Type": {
+      "description": "One of the canonical CRREM property types, or 'Mixed Use'. See Property Types & Definitions reference.",
+      "x-unit": "\u2014",
+      "x-group": "use",
+      "x-required": "required",
+      "type": "string"
+    },
+    "GIA": {
+      "description": "Gross Internal Area. Denominator for all intensity calculations. Must be > 0. Excludes indoor parking.",
+      "x-unit": "m\u00b2",
+      "x-group": "use",
+      "x-required": "required",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "Reporting_Year": {
+      "description": "Year the consumption data refers to. Must exist as a column in Pathways and Emission Factors datasets.",
+      "x-unit": "yyyy",
+      "x-group": "use",
+      "x-required": "required",
+      "type": "integer",
+      "minimum": 2020,
+      "maximum": 2050
+    },
+    "Elec_Grid": {
+      "description": "Grid electricity consumption.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "required",
+      "type": "number",
+      "minimum": 0
+    },
+    "Gas": {
+      "description": "Natural gas consumption. Enter 0 if unused.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "Oil": {
+      "description": "Heating oil consumption.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "District_Heating": {
+      "description": "District heating consumption.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "District_Cooling": {
+      "description": "District cooling consumption.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "Biomass": {
+      "description": "Biomass energy consumption.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "Other_Fuels": {
+      "description": "Coal, LPG, or other fuels.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "Renew_Consumed": {
+      "description": "On-site renewable energy generated AND consumed on-site. EF = 0 for carbon. Counts toward Total_Energy.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    },
+    "Renew_Exported": {
+      "description": "On-site renewable energy exported to grid. NOT in Total_Energy. Used only for grid export credit in Step 4, capped at CO2_Elec.",
+      "x-unit": "kWh/yr",
+      "x-group": "energy",
+      "x-required": "if applicable",
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "Asset_Name",
+    "Country",
+    "Property_Type",
+    "GIA",
+    "Reporting_Year",
+    "Elec_Grid"
+  ],
+  "patternProperties": {
+    "^MU_[A-Za-z_]+_Pct$": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Floor-area share per use type. All MU_*_Pct must sum to 100 when Property_Type = 'Mixed Use'."
+    }
+  },
+  "additionalProperties": false,
+  "formulaGraph": [
+    {
+      "id": "total-energy",
+      "step": "asset-2",
+      "output": "Total_Energy",
+      "unit": "kWh/yr",
+      "inputs": [
+        "Elec_Grid",
+        "Gas",
+        "Oil",
+        "District_Heating",
+        "District_Cooling",
+        "Biomass",
+        "Other_Fuels",
+        "Renew_Consumed"
+      ],
+      "formula": "Total_Energy = Elec_Grid + Gas + Oil + District_Heating + District_Cooling + Biomass + Other_Fuels + Renew_Consumed",
+      "notes": "Renew_Exported is NOT included."
+    },
+    {
+      "id": "eui",
+      "step": "asset-2",
+      "output": "EUI",
+      "unit": "kWh/m\u00b2/yr",
+      "inputs": [
+        "Total_Energy",
+        "GIA"
+      ],
+      "formula": "EUI = Total_Energy / GIA",
+      "notes": "Key output. Compared against CRREM EUI pathway in Step 6."
+    },
+    {
+      "id": "co2-per-carrier",
+      "step": "asset-4",
+      "output": "CO2_<carrier>",
+      "unit": "kgCO2e/yr",
+      "inputs": [
+        "<carrier-consumption>",
+        "EF_<carrier>"
+      ],
+      "formula": "CO2_<carrier> = <carrier> * EF_<carrier>",
+      "notes": "Apply per carrier. CO2_Renew = Renew_Consumed * 0 (hard-coded EF=0). EF_Electricity varies per country \u00d7 Reporting_Year."
+    },
+    {
+      "id": "total-co2",
+      "step": "asset-4",
+      "output": "Total_CO2",
+      "unit": "kgCO2e/yr",
+      "inputs": [
+        "CO2_Elec",
+        "CO2_Gas",
+        "CO2_Oil",
+        "CO2_DH",
+        "CO2_DC",
+        "CO2_Biomass",
+        "CO2_Other",
+        "CO2_Renew"
+      ],
+      "formula": "Total_CO2 = SUM(CO2_Elec : CO2_Renew)"
+    },
+    {
+      "id": "grid-export-credit",
+      "step": "asset-4",
+      "output": "Grid_Export_Credit",
+      "unit": "kgCO2e/yr",
+      "inputs": [
+        "Renew_Exported",
+        "Elec_Grid",
+        "EF_Electricity"
+      ],
+      "formula": "Grid_Export_Credit = MIN(Renew_Exported * EF_Electricity, Elec_Grid * EF_Electricity)",
+      "notes": "CRITICAL: capped at grid electricity emissions. Cannot offset gas/oil/DH with surplus solar export."
+    },
+    {
+      "id": "carbon-intensity",
+      "step": "asset-4",
+      "output": "Carbon_Intensity",
+      "unit": "kgCO2e/m\u00b2/yr",
+      "inputs": [
+        "Total_CO2",
+        "Grid_Export_Credit",
+        "GIA"
+      ],
+      "formula": "Carbon_Intensity = (Total_CO2 - Grid_Export_Credit) / GIA",
+      "notes": "Key output. Compared against CRREM CO2 pathway in Step 6."
+    },
+    {
+      "id": "pathway-lookup",
+      "step": "asset-5",
+      "output": "CO2_Pathway(t), EUI_Pathway(t)",
+      "unit": "kgCO2e/m\u00b2/yr, kWh/m\u00b2/yr",
+      "inputs": [
+        "CRREM_Region",
+        "Property_Type",
+        "t"
+      ],
+      "formula": "Pathway(t) = INDEX/MATCH(Pathways, CRREM_Region & Property_Type, year=t)",
+      "notes": "For USA/CAN/AUS, CRREM_Region resolved from Postal_Code via Postal Code Lookup. Otherwise CRREM_Region = Country."
+    },
+    {
+      "id": "mixed-use-blending",
+      "step": "asset-5",
+      "output": "Blended_Pathway(t)",
+      "unit": "same as component pathway",
+      "inputs": [
+        "MU_Pct[i]",
+        "Pathway(Country, Type[i], t)"
+      ],
+      "formula": "Blended_Pathway(t) = SUM_over_i( MU_Pct[i] * Pathway(Country, Type[i], t) )",
+      "notes": "CRITICAL: recompute for every year t separately \u2014 component pathways decline at different rates."
+    },
+    {
+      "id": "carbon-intensity-t",
+      "step": "asset-6",
+      "output": "Carbon_Intensity(t)",
+      "unit": "kgCO2e/m\u00b2/yr",
+      "inputs": [
+        "Elec_Grid",
+        "EF_Elec(t)",
+        "all carrier consumptions",
+        "Renew_Exported",
+        "GIA"
+      ],
+      "formula": "Carbon_Intensity(t) = (CO2(t) - Grid_Export_Credit(t)) / GIA, where CO2(t) uses EF_Elec(t) and all other EFs constant",
+      "notes": "Forward projection: demand held constant, grid EFs decline per Emission Factors dataset."
+    },
+    {
+      "id": "climate-adjusted-eui",
+      "step": "asset-6.1a",
+      "output": "Total_Energy(t)",
+      "unit": "kWh/yr",
+      "inputs": [
+        "Energy_Heating",
+        "HDD_Ratio(t)",
+        "Energy_Cooling",
+        "CDD_Ratio(t)",
+        "Energy_Baseload"
+      ],
+      "formula": "Total_Energy(t) = Energy_Heating * HDD_Ratio(t) + Energy_Cooling * CDD_Ratio(t) + Energy_Baseload",
+      "notes": "OPTIONAL. Replaces flat-demand assumption when HDD/CDD projections are supplied. Requires SSP scenario choice."
+    },
+    {
+      "id": "misalignment-year",
+      "step": "asset-6",
+      "output": "CO2_Misalignment_Year, EUI_Misalignment_Year",
+      "unit": "year",
+      "inputs": [
+        "Carbon_Intensity(t)",
+        "CO2_Pathway(t)",
+        "EUI(t)",
+        "EUI_Pathway(t)"
+      ],
+      "formula": "CO2_Misalignment_Year = first t in [Reporting_Year, 2050] where Carbon_Intensity(t) > CO2_Pathway(t)",
+      "notes": "Key output. Report Reporting_Year if already misaligned, or 'Beyond 2050' if no crossing."
+    },
+    {
+      "id": "gia-weights",
+      "step": "portfolio-2",
+      "output": "Total_GIA, GIA_Weight_j",
+      "unit": "m\u00b2, %",
+      "inputs": [
+        "GIA_j"
+      ],
+      "formula": "Total_GIA = SUM(GIA_j); GIA_Weight_j = GIA_j / Total_GIA"
+    },
+    {
+      "id": "portfolio-carbon-intensity",
+      "step": "portfolio-2",
+      "output": "Portfolio_Carbon_Intensity, Portfolio_Carbon_Intensity(t)",
+      "unit": "kgCO2e/m\u00b2/yr",
+      "inputs": [
+        "GIA_Weight_j",
+        "Carbon_Intensity_j",
+        "Carbon_Intensity_j(t)"
+      ],
+      "formula": "Portfolio_Carbon_Intensity(t) = SUM_over_j( GIA_Weight_j * Carbon_Intensity_j(t) )",
+      "notes": "Key output. Equivalent to SUM(Net_CO2_j) / SUM(GIA_j) at reporting year."
+    },
+    {
+      "id": "portfolio-eui",
+      "step": "portfolio-2",
+      "output": "Portfolio_EUI, Portfolio_EUI(t)",
+      "unit": "kWh/m\u00b2/yr",
+      "inputs": [
+        "GIA_Weight_j",
+        "EUI_j",
+        "EUI_j(t)"
+      ],
+      "formula": "Portfolio_EUI(t) = SUM_over_j( GIA_Weight_j * EUI_j(t) )"
+    },
+    {
+      "id": "portfolio-pathway",
+      "step": "portfolio-3",
+      "output": "Portfolio_CO2_Pathway(t), Portfolio_EUI_Pathway(t)",
+      "unit": "kgCO2e/m\u00b2/yr, kWh/m\u00b2/yr",
+      "inputs": [
+        "GIA_Weight_j",
+        "CO2_Pathway_j(t)",
+        "EUI_Pathway_j(t)"
+      ],
+      "formula": "Portfolio_CO2_Pathway(t) = SUM_over_j( GIA_Weight_j * CO2_Pathway_j(t) ) for each t in 2020..2050",
+      "notes": "Full time series. Declines year by year."
+    },
+    {
+      "id": "portfolio-misalignment",
+      "step": "portfolio-4",
+      "output": "Portfolio_CO2_Misalignment_Year, Portfolio_EUI_Misalignment_Year",
+      "unit": "year",
+      "inputs": [
+        "Portfolio_Carbon_Intensity(t)",
+        "Portfolio_CO2_Pathway(t)"
+      ],
+      "formula": "Portfolio_CO2_Misalignment_Year = first t where Portfolio_Carbon_Intensity(t) > Portfolio_CO2_Pathway(t)"
+    }
+  ],
+  "edgeCases": [
+    {
+      "id": "grid-export-credit-cap",
+      "severity": "critical",
+      "title": "Grid export credit cap",
+      "body": "Credit for exported on-site renewables is capped at grid electricity emissions. You cannot offset gas, oil, or district heating emissions with surplus solar export.",
+      "formula": "Grid_Export_Credit = MIN(Renew_Exported * EF_Elec, Elec_Grid * EF_Elec)"
+    },
+    {
+      "id": "mixed-use-blending",
+      "severity": "critical",
+      "title": "Mixed-use pathway blending",
+      "body": "For mixed-use buildings there is no single pathway row. Compute a floor-area-weighted blend of the per-use pathways, separately for every year from 2020 to 2050.",
+      "formula": "Blended_Pathway(t) = SUM_over_i( MU_Pct[i] * Pathway(Country, Type[i], t) )"
+    },
+    {
+      "id": "renew-consumed-eui-only",
+      "severity": "behavior",
+      "title": "Renew_Consumed counts for EUI, not CO2",
+      "body": "On-site renewables consumed on-site are real energy consumption and are included in Total_Energy. Their emission factor is 0, so they do not affect Carbon_Intensity. This asymmetry is by design."
+    },
+    {
+      "id": "dh-dc-legacy-fallback",
+      "severity": "legacy",
+      "title": "District heating/cooling EF \u2014 legacy fallback",
+      "body": "If no site-specific EF is supplied, the legacy fallback scales the UK default (0.20431) against the local grid trajectory.",
+      "formula": "EF_DH(country, t) = 0.20431 * EF_Grid(country, t) / EF_Grid(UK, 2020)"
+    },
+    {
+      "id": "climate-adjusted-eui",
+      "severity": "optional",
+      "title": "Climate-adjusted EUI projection (HDD/CDD)",
+      "body": "Default is flat demand. If HDD/CDD projections are supplied, scale heating and cooling shares of energy separately.",
+      "formula": "Total_Energy(t) = Energy_Heating * HDD_Ratio(t) + Energy_Cooling * CDD_Ratio(t) + Energy_Baseload"
+    },
+    {
+      "id": "forward-projection",
+      "severity": "behavior",
+      "title": "Forward projection basis",
+      "body": "Energy demand held constant. Grid EFs decline annually per the Emission Factors dataset. All other EFs are constant (exception: DH/DC legacy fallback follows the grid trajectory). This produces a year-by-year declining Carbon_Intensity curve even without retrofits."
+    }
+  ],
+  "pathwayResolution": {
+    "steps": [
+      {
+        "n": 1,
+        "name": "Read Country",
+        "desc": "From asset input. Starting point."
+      },
+      {
+        "n": 2,
+        "name": "Check sub-national split",
+        "desc": "If USA, CAN, or AUS \u2192 lookup. Otherwise: CRREM_Region = Country."
+      },
+      {
+        "n": 3,
+        "name": "Resolve postal code",
+        "desc": "Lookup Postal_Code in the external Postal Code Lookup table."
+      },
+      {
+        "n": 4,
+        "name": "Select pathway row",
+        "desc": "INDEX/MATCH CRREM_Region & Property_Type in Pathways dataset."
+      }
+    ],
+    "examples": [
+      {
+        "country": "USA",
+        "basis": "eGRID subregion + climate zone",
+        "input": "ZIP 10005",
+        "region": "NYSTc_Mixed mild_4A"
+      },
+      {
+        "country": "Canada",
+        "basis": "province-level",
+        "input": "FSA T2P",
+        "region": "Alberta"
+      },
+      {
+        "country": "Australia",
+        "basis": "NCC climate zone",
+        "input": "Postcode 2170",
+        "region": "NCC Zone 6"
+      }
+    ]
+  },
+  "companionDatasets": [
+    {
+      "id": "pathways",
+      "required": true,
+      "name": "CRREM Global Pathways",
+      "unit": "year \u00d7 region \u00d7 property type"
+    },
+    {
+      "id": "ef",
+      "required": true,
+      "name": "Emission Factors",
+      "unit": "carrier \u00d7 country \u00d7 year"
+    },
+    {
+      "id": "postal",
+      "required": "USA/CAN/AUS only",
+      "name": "Postal Code Lookup",
+      "unit": "postal code \u2192 CRREM region"
+    },
+    {
+      "id": "hdd-cdd",
+      "required": false,
+      "name": "HDD/CDD Projections",
+      "unit": "location \u00d7 year \u00d7 SSP scenario"
+    }
+  ]
+}
