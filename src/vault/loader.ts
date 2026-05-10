@@ -378,6 +378,65 @@ export async function writeECM(
   await writable.close()
 }
 
+function assetToFrontmatter(a: Asset): Record<string, unknown> {
+  const fm: Record<string, unknown> = {
+    doc_type: 'asset',
+    asset_schema: '1.0',
+    id: a.id,
+    name: a.name,
+    country: a.country,
+    property_type: a.property_type,
+    gia_m2: a.gia_m2,
+    reporting_year: a.reporting_year,
+    energy: a.energy,
+  }
+  if (a.postal_code) fm.postal_code = a.postal_code
+  if (a.region) fm.region = a.region
+  if (a.mixed_use_split && a.mixed_use_split.length > 0) fm.mixed_use_split = a.mixed_use_split
+  if (a.utility_prices) fm.utility_prices = a.utility_prices
+  if (a.tags && a.tags.length > 0) fm.tags = a.tags
+  return fm
+}
+
+export async function writeAsset(
+  vault: FileSystemDirectoryHandle,
+  asset: Asset,
+): Promise<void> {
+  const dir = await vault.getDirectoryHandle('assets', { create: true })
+  const fileHandle = await dir.getFileHandle(`${asset.id}.md`, { create: true })
+  const writable = await fileHandle.createWritable()
+  const fm = assetToFrontmatter(asset)
+  const body = asset.body && asset.body.trim().length > 0 ? asset.body : `\n# ${asset.name}\n`
+  await writable.write(buildFrontmatter(fm, body))
+  await writable.close()
+}
+
+async function softDelete(
+  vault: FileSystemDirectoryHandle,
+  subdir: string,
+  filename: string,
+): Promise<void> {
+  const sourceDir = await vault.getDirectoryHandle(subdir)
+  const trashDir = await vault.getDirectoryHandle('trash', { create: true })
+  const trashSubdir = await trashDir.getDirectoryHandle(subdir, { create: true })
+
+  const sourceHandle = await sourceDir.getFileHandle(filename)
+  const file = await sourceHandle.getFile()
+  const content = await file.text()
+  const targetHandle = await trashSubdir.getFileHandle(filename, { create: true })
+  const writable = await targetHandle.createWritable()
+  await writable.write(content)
+  await writable.close()
+  await sourceDir.removeEntry(filename)
+}
+
+export async function deleteAsset(
+  vault: FileSystemDirectoryHandle,
+  assetId: string,
+): Promise<void> {
+  await softDelete(vault, 'assets', `${assetId}.md`)
+}
+
 export async function deleteScenario(
   vault: FileSystemDirectoryHandle,
   scenarioId: string,

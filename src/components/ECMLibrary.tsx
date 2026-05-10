@@ -1,7 +1,23 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useStore } from '../store'
 import { parseFrontmatter } from '../vault/loader'
-import type { ECM } from '../engine/types'
+import type { ECM, ECMImpact, Carrier } from '../engine/types'
+
+const CARRIERS: Carrier[] = [
+  'Elec_Grid', 'District_Heating', 'District_Cooling', 'Gas', 'Oil', 'Biomass',
+  'Other_Fuels', 'Renew_Consumed', 'Renew_Exported',
+]
+const ECM_CATEGORIES = [
+  'Lighting', 'HVAC', 'Controls', 'Envelope', 'Renewables', 'Metering', 'Other',
+]
+
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'ecm'
+}
+
+function emptyECMImpact(): ECMImpact {
+  return { carrier: 'Elec_Grid', operation: 'reduce', mode: 'percent', value_typical: 10 }
+}
 
 const CATEGORY_COLOURS: Record<string, string> = {
   Lighting: 'bg-amber-100 text-amber-700',
@@ -30,6 +46,24 @@ export default function ECMLibrary() {
   const [category, setCategory] = useState<string>('')
   const [applyFor, setApplyFor] = useState<string | null>(null) // ECM id pending apply
   const [yearInput, setYearInput] = useState('2030')
+  const [creatingECM, setCreatingECM] = useState(false)
+  const [draftECM, setDraftECM] = useState<ECM>({
+    id: '', name: '', category: 'Lighting', license: 'CC-BY-4.0', version: '1.0',
+    impacts: [emptyECMImpact()],
+  })
+
+  const handleCreateECM = async () => {
+    if (!draftECM.name.trim()) return
+    let id = draftECM.id || slugify(draftECM.name)
+    let n = 2; const base = id
+    while (ecms.some(x => x.id === id)) id = `${base}-${n++}`
+    await saveECM({ ...draftECM, id })
+    setCreatingECM(false)
+    setDraftECM({
+      id: '', name: '', category: 'Lighting', license: 'CC-BY-4.0', version: '1.0',
+      impacts: [emptyECMImpact()],
+    })
+  }
 
   useEffect(() => {
     if (!open) return
@@ -146,7 +180,121 @@ export default function ECMLibrary() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-          {filtered.length === 0 && (
+          {creatingECM && (
+            <div className="border-2 border-crrem-navy/30 rounded-xl p-4 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-slate-800">New ECM</h4>
+                <button onClick={() => setCreatingECM(false)} className="text-slate-400 text-xl leading-none">×</button>
+              </div>
+              <div className="space-y-2">
+                <input
+                  value={draftECM.name}
+                  onChange={e => setDraftECM({ ...draftECM, name: e.target.value })}
+                  placeholder="Name (e.g. Window Glazing Upgrade)"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
+                />
+                <div className="flex gap-2">
+                  <select
+                    value={draftECM.category}
+                    onChange={e => setDraftECM({ ...draftECM, category: e.target.value })}
+                    className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white"
+                  >
+                    {ECM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input
+                    value={draftECM.license ?? ''}
+                    onChange={e => setDraftECM({ ...draftECM, license: e.target.value })}
+                    placeholder="License"
+                    className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <textarea
+                  value={draftECM.summary ?? ''}
+                  onChange={e => setDraftECM({ ...draftECM, summary: e.target.value })}
+                  placeholder="Short summary (one sentence)"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
+                />
+
+                <div className="border-t border-slate-100 pt-2">
+                  <div className="text-xs font-semibold text-slate-600 mb-1.5">Impacts</div>
+                  {draftECM.impacts.map((imp, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs mb-1.5">
+                      <select
+                        value={imp.carrier}
+                        onChange={e => {
+                          const next = [...draftECM.impacts]
+                          next[i] = { ...next[i], carrier: e.target.value as Carrier }
+                          setDraftECM({ ...draftECM, impacts: next })
+                        }}
+                        className="px-2 py-1 border border-slate-200 rounded-lg bg-white"
+                      >
+                        {CARRIERS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select
+                        value={imp.operation}
+                        onChange={e => {
+                          const next = [...draftECM.impacts]
+                          next[i] = { ...next[i], operation: e.target.value as ECMImpact['operation'] }
+                          setDraftECM({ ...draftECM, impacts: next })
+                        }}
+                        className="px-2 py-1 border border-slate-200 rounded-lg bg-white"
+                      >
+                        <option value="reduce">reduce</option>
+                        <option value="add">add</option>
+                        <option value="remove">remove</option>
+                      </select>
+                      {imp.operation !== 'remove' && (
+                        <>
+                          <input
+                            type="number"
+                            value={imp.value_typical}
+                            onChange={e => {
+                              const next = [...draftECM.impacts]
+                              next[i] = { ...next[i], value_typical: Number(e.target.value) }
+                              setDraftECM({ ...draftECM, impacts: next })
+                            }}
+                            className="w-16 px-2 py-1 border border-slate-200 rounded-lg"
+                          />
+                          <select
+                            value={imp.mode}
+                            onChange={e => {
+                              const next = [...draftECM.impacts]
+                              next[i] = { ...next[i], mode: e.target.value as ECMImpact['mode'] }
+                              setDraftECM({ ...draftECM, impacts: next })
+                            }}
+                            className="px-2 py-1 border border-slate-200 rounded-lg bg-white"
+                          >
+                            <option value="percent">%</option>
+                            <option value="absolute">kWh</option>
+                          </select>
+                        </>
+                      )}
+                      <button
+                        onClick={() => setDraftECM({ ...draftECM, impacts: draftECM.impacts.filter((_, j) => j !== i) })}
+                        className="ml-auto text-red-500 hover:text-red-700 text-sm"
+                      >×</button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDraftECM({ ...draftECM, impacts: [...draftECM.impacts, emptyECMImpact()] })}
+                    className="text-xs text-crrem-navy hover:underline"
+                  >+ Add impact</button>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={() => setCreatingECM(false)} className="text-xs px-3 py-1.5 text-slate-500">Cancel</button>
+                  <button
+                    onClick={handleCreateECM}
+                    disabled={!draftECM.name.trim() || readOnly}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-crrem-navy text-white font-medium disabled:opacity-40"
+                  >Create</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {filtered.length === 0 && !creatingECM && (
             <p className="text-sm text-slate-400 text-center py-8 italic">No ECMs match.</p>
           )}
           {filtered.map(ecm => {
@@ -223,6 +371,14 @@ export default function ECMLibrary() {
               e.target.value = ''
             }}
           />
+          <button
+            onClick={() => setCreatingECM(true)}
+            disabled={readOnly || creatingECM}
+            className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl bg-crrem-navy text-white font-medium hover:bg-crrem-navy/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to create' : 'Create a new ECM'}
+          >
+            + Create ECM
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={readOnly}

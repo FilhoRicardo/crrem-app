@@ -3,11 +3,13 @@ import type { Asset, Scenario, ECM, Portfolio } from './engine/types'
 import {
   loadVault, loadSampleVault, requestVaultDirectory, ensureReadWritePermission,
   writeScenario as writeScenarioToVault, writeECM as writeECMToVault,
+  writeAsset as writeAssetToVault,
   deleteScenario as deleteScenarioFromVault,
+  deleteAsset as deleteAssetFromVault,
 } from './vault/loader'
 
 export type VaultMode = 'none' | 'sample' | 'fsa'
-export type ViewMode = 'asset' | 'portfolio'
+export type ViewMode = 'asset' | 'portfolio' | 'properties'
 
 interface AppState {
   // Vault state — vaultDir is non-serialisable; do NOT add persist middleware.
@@ -46,6 +48,8 @@ interface AppState {
   saveScenario: (scenario: Scenario) => Promise<void>
   deleteScenario: (scenarioId: string) => Promise<void>
   saveECM: (ecm: ECM) => Promise<void>
+  saveAsset: (asset: Asset) => Promise<void>
+  deleteAsset: (assetId: string) => Promise<void>
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -215,6 +219,40 @@ export const useStore = create<AppState>((set, get) => ({
         await writeECMToVault(vaultDir, ecm)
       } catch (e) {
         set(s => ({ loadErrors: [...s.loadErrors, `Save ECM: ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
+
+  saveAsset: async (asset) => {
+    const { vaultMode, vaultDir, assets, selectedAssetId } = get()
+    const next = assets.some(a => a.id === asset.id)
+      ? assets.map(a => (a.id === asset.id ? asset : a))
+      : [...assets, asset]
+    set({
+      assets: next,
+      selectedAssetId: selectedAssetId ?? asset.id,
+    })
+    if (vaultMode === 'fsa' && vaultDir) {
+      try {
+        await writeAssetToVault(vaultDir, asset)
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Save asset "${asset.name}": ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
+
+  deleteAsset: async (assetId) => {
+    const { vaultMode, vaultDir, assets, selectedAssetId } = get()
+    const remaining = assets.filter(a => a.id !== assetId)
+    set({
+      assets: remaining,
+      selectedAssetId: selectedAssetId === assetId ? (remaining[0]?.id ?? null) : selectedAssetId,
+    })
+    if (vaultMode === 'fsa' && vaultDir) {
+      try {
+        await deleteAssetFromVault(vaultDir, assetId)
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Delete asset: ${e instanceof Error ? e.message : String(e)}`] }))
       }
     }
   },

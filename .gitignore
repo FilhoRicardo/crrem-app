@@ -12,3 +12,5 @@ Thumbs.db
 # Claude Code: share team config, ignore user-local overrides
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+.vercel
