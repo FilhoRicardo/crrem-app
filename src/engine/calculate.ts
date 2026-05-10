@@ -1,5 +1,5 @@
 import type {
-  Carrier, EnergyMap, Retrofit, MixedUseSplit,
+  Carrier, EnergyMap, Retrofit, MixedUseSplit, YearActual,
   YearMetrics, PathwayPoint, TrajectoryPoint,
   EFProvider, PathwayProvider, ProjectTrajectoryInput,
 } from './types'
@@ -119,13 +119,18 @@ export function blendPathway(
  * Project an asset's trajectory from startYear to endYear.
  * Energy demand stays flat year-over-year; grid EFs decline via getEF.
  * Retrofits modify carriers from their activation year onward.
+ *
+ * If `getActual(year)` returns a non-null EnergyMap, that map replaces the
+ * projected baseline+retrofits for that year (per CRREM methodology — actuals
+ * always supersede projection where measured data exists).
  */
 export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoint[] {
-  const { baseEnergy, gia, getEF, getPathway, region, split, retrofits, startYear, endYear } = input
+  const { baseEnergy, gia, getEF, getPathway, region, split, retrofits, startYear, endYear, getActual } = input
   const points: TrajectoryPoint[] = []
 
   for (let year = startYear; year <= endYear; year++) {
-    const energy = applyRetrofitsForYear(baseEnergy, retrofits, year)
+    const actual = getActual?.(year) ?? null
+    const energy = actual ?? applyRetrofitsForYear(baseEnergy, retrofits, year)
     const metrics = calculateYearMetrics(energy, gia, getEF, region, year)
     const pathway = blendPathway(getPathway, region, split, year)
 
@@ -135,9 +140,41 @@ export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoin
       pathway,
       misaligned_co2: metrics.carbon_intensity_kgco2e_m2 > pathway.carbon_kgco2e_m2,
       misaligned_eui: metrics.eui_kwh_m2 > pathway.eui_kwh_m2,
+      is_actual: actual !== null,
     })
   }
   return points
+}
+
+/** Sum monthly readings (12 values jan-dec, possibly with nulls) to an annual EnergyMap. */
+export function annualFromMonthly(monthly: YearActual['monthly']): EnergyMap {
+  const out: EnergyMap = {}
+  if (!monthly) return out
+  for (const carrier of Object.keys(monthly) as Carrier[]) {
+    const vals = monthly[carrier]
+    if (!Array.isArray(vals)) continue
+    let total = 0
+    for (const v of vals) total += typeof v === 'number' ? v : 0
+    if (total > 0) out[carrier] = total
+  }
+  return out
+}
+
+/**
+ * Resolve a measured EnergyMap for `year` from an asset's actuals array.
+ * Prefers monthly when present; falls back to the annual aggregate.
+ * Returns null when no actuals exist for that year.
+ */
+export function actualForYear(actuals: YearActual[] | undefined, year: number): EnergyMap | null {
+  if (!actuals) return null
+  const a = actuals.find(x => x.year === year)
+  if (!a) return null
+  if (a.monthly) {
+    const m = annualFromMonthly(a.monthly)
+    if (Object.keys(m).length > 0) return m
+  }
+  if (a.annual && Object.keys(a.annual).length > 0) return a.annual
+  return null
 }
 
 /**

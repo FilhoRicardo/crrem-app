@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import type { Asset, EnergyMap, Carrier } from '../engine/types'
+import type { Asset, EnergyMap, Carrier, YearActual } from '../engine/types'
 import { assetToMarkdown } from '../vault/loader'
 import { downloadText } from '../utils/download'
 import TemplateButton from './TemplateButton'
+import ActualsEditor from './ActualsEditor'
 
 const CARRIERS: Carrier[] = [
   'Elec_Grid', 'District_Heating', 'District_Cooling', 'Gas', 'Oil', 'Biomass',
@@ -187,9 +188,9 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
       </div>
 
       <div className="mt-5">
-        <h4 className="text-sm font-semibold text-slate-700 mb-2">Energy consumption (kWh/yr)</h4>
+        <h4 className="text-sm font-semibold text-slate-700 mb-2">Baseline energy (reporting year, kWh/yr)</h4>
         <p className="text-xs text-slate-400 mb-3">
-          Whole-building annual demand per carrier. Leave at 0 to omit.
+          Whole-building annual demand per carrier. Leave at 0 to omit. Used for years that don't have measured actuals below.
         </p>
         <div className="grid grid-cols-3 gap-3">
           {CARRIERS.map(c => (
@@ -207,6 +208,14 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
             </Field>
           ))}
         </div>
+      </div>
+
+      <div className="mt-5">
+        <ActualsEditor
+          asset={draft}
+          onChange={(actuals: YearActual[]) => setDraft({ ...draft, actuals })}
+          readOnly={readOnly}
+        />
       </div>
 
       {error && (

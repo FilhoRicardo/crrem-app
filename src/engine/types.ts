@@ -62,6 +62,8 @@ export interface TrajectoryPoint {
   pathway: PathwayPoint
   misaligned_co2: boolean
   misaligned_eui: boolean
+  /** True when this year's energy came from a measured actual rather than projection. */
+  is_actual?: boolean
 }
 
 export interface MixedUseSplit {
@@ -87,6 +89,12 @@ export interface ProjectTrajectoryInput {
   retrofits: Retrofit[]
   startYear: number
   endYear: number
+  /**
+   * Optional callback returning measured energy for a given year.
+   * When it returns a non-null EnergyMap, that map replaces the projected baseline+retrofits
+   * for that year (per CRREM methodology — actuals override projection).
+   */
+  getActual?: (year: number) => EnergyMap | null
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -104,6 +112,26 @@ export interface UtilityPrices {
   currency?: string
 }
 
+/**
+ * Measured energy consumption for a single calendar year.
+ * Per CRREM method, actuals (when present) replace the projected baseline
+ * for that year. The engine sums monthly readings to an annual EnergyMap.
+ */
+export interface YearActual {
+  year: number
+  /**
+   * 12 values per carrier in calendar order — index 0 = Jan, index 11 = Dec.
+   * Missing months are treated as 0 (and surfaced visually). Use null for "not yet read".
+   */
+  monthly?: Partial<Record<Carrier, Array<number | null>>>
+  /**
+   * Annual fallback when monthly breakdown isn't available.
+   * Engine prefers `monthly` over `annual` when both are present.
+   */
+  annual?: EnergyMap
+  notes?: string
+}
+
 export interface Asset {
   id: string
   name: string
@@ -117,6 +145,8 @@ export interface Asset {
   mixed_use_split?: MixedUseSplit[]
   utility_prices?: UtilityPrices
   tags?: string[]
+  /** Measured per-year consumption. Overrides projection where present. */
+  actuals?: YearActual[]
   body?: string
 }
 

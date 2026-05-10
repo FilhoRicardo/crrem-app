@@ -47,6 +47,21 @@ utility_prices:              # Used to compute opex savings / payback for retrof
   currency: USD
 
 tags: [office, sample]
+
+# Optional — measured monthly meter readings.
+# Per CRREM, when actuals exist for a year they replace the projected baseline
+# for that year. Months can be null when not yet read.
+actuals:
+  - year: 2024
+    monthly:
+      # 12 values, Jan through Dec
+      Elec_Grid:        [70000, 65000, 72000, 68000, 75000, 80000, 82000, 81000, 75000, 70000, 65000, 70000]
+      District_Heating: [120000, 100000, 80000, 50000, 30000, 20000, 15000, 15000, 30000, 60000, 90000, 110000]
+    notes: First full year of metering
+  - year: 2025
+    annual:                 # Annual fallback when monthly isn't available
+      Elec_Grid: 870000
+      District_Heating: 690000
 ---
 
 # My Building

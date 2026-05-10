@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import Plotly from 'plotly.js-dist-min'
 import type { Asset, Scenario, EFProvider, PathwayProvider, TrajectoryPoint } from '../engine/types'
-import { projectTrajectory, findMisalignmentYear } from '../engine/calculate'
+import { projectTrajectory, findMisalignmentYear, actualForYear } from '../engine/calculate'
 import { splitForAsset, regionForAsset } from '../vault/loader'
 
 interface Props {
@@ -31,6 +31,7 @@ export function buildScenarioTrajectories(
 ): ScenarioTrajectory[] {
   const region = regionForAsset(asset)
   const split = splitForAsset(asset)
+  const getActual = (year: number) => actualForYear(asset.actuals, year)
   return scenarios.map(scenario => {
     const trajectory = projectTrajectory({
       baseEnergy: asset.energy,
@@ -42,6 +43,7 @@ export function buildScenarioTrajectories(
       retrofits: scenario.retrofits,
       startYear,
       endYear,
+      getActual,
     })
     const misalignmentYear = findMisalignmentYear(trajectory).co2
     return { scenario, trajectory, misalignmentYear }
@@ -90,16 +92,45 @@ export default function StrandingChart({
 
     series.forEach((s, idx) => {
       const colour = PALETTE[idx % PALETTE.length]
+      const xs = years
+      const ys = s.trajectory.map(p => p.metrics.carbon_intensity_kgco2e_m2)
+      const flags = s.trajectory.map(p => !!p.is_actual)
+
+      // Projected line — dashed where the year has no actual; solid where it does.
+      // Plotly handles per-segment dashing via two traces sharing the same name.
+      const projY = ys.map((v, i) => (flags[i] ? null : v))
+      const actY = ys.map((v, i) => (flags[i] ? v : null))
+
+      // Continuity: if neighbours alternate, duplicate boundary points so lines connect.
+      for (let i = 1; i < flags.length; i++) {
+        if (flags[i] !== flags[i - 1]) {
+          projY[i - 1] = ys[i - 1]
+          actY[i - 1] = ys[i - 1]
+        }
+      }
+
       traces.push({
-        x: years,
-        y: s.trajectory.map(p => p.metrics.carbon_intensity_kgco2e_m2),
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: s.scenario.name,
-        line: { color: colour, width: 2.5 },
-        marker: { color: colour, size: 4 },
-        hovertemplate: `<b>%{x}</b><br>${s.scenario.name}: %{y:.2f} kgCO₂e/m²<extra></extra>`,
-      })
+        x: xs, y: projY,
+        type: 'scatter', mode: 'lines',
+        name: s.scenario.name + ' (projected)',
+        legendgroup: s.scenario.name,
+        line: { color: colour, width: 2.5, dash: 'dash' },
+        connectgaps: false,
+        hovertemplate: `<b>%{x}</b><br>${s.scenario.name} (projected): %{y:.2f} kgCO₂e/m²<extra></extra>`,
+      } as Plotly.Data)
+
+      const hasActuals = flags.some(Boolean)
+      traces.push({
+        x: xs, y: actY,
+        type: 'scatter', mode: 'lines+markers',
+        name: hasActuals ? s.scenario.name + ' (actual)' : s.scenario.name,
+        legendgroup: s.scenario.name,
+        showlegend: hasActuals,  // Hide the redundant "(actual)" entry when there are no actuals
+        line: { color: colour, width: 3 },
+        marker: { color: colour, size: 6, symbol: 'circle' },
+        connectgaps: false,
+        hovertemplate: `<b>%{x}</b><br>${s.scenario.name} (measured): %{y:.2f} kgCO₂e/m²<extra></extra>`,
+      } as Plotly.Data)
     })
 
     const shapes: Partial<Plotly.Shape>[] = []

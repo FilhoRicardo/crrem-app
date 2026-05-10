@@ -1,6 +1,7 @@
 import yaml from 'js-yaml'
 import type {
   Asset, Scenario, ECM, Portfolio, Retrofit, ECMImpact, MixedUseSplit, EnergyMap,
+  YearActual, Carrier,
 } from '../engine/types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ function parseAsset(filename: string, data: Record<string, unknown>, body: strin
         fraction: asNumber(s.fraction, `mixed_use_split[${i}].fraction`, filename),
       }))
     : undefined
+  const actuals = parseActuals(data.actuals, filename)
   return {
     id: asString(data.id, 'id', filename),
     name: asString(data.name, 'name', filename),
@@ -136,8 +138,41 @@ function parseAsset(filename: string, data: Record<string, unknown>, body: strin
     mixed_use_split: split,
     utility_prices: isObj(data.utility_prices) ? (data.utility_prices as Asset['utility_prices']) : undefined,
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : undefined,
+    actuals,
     body,
   }
+}
+
+function parseActuals(raw: unknown, filename: string): YearActual[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  return raw.map((entry, i): YearActual => {
+    if (!isObj(entry)) {
+      throw new LoadError(filename, `actuals[${i}] must be an object`)
+    }
+    const year = asNumber(entry.year, `actuals[${i}].year`, filename)
+    const out: YearActual = { year }
+    if (isObj(entry.monthly)) {
+      const monthly: Partial<Record<Carrier, Array<number | null>>> = {}
+      for (const [k, v] of Object.entries(entry.monthly)) {
+        if (!Array.isArray(v)) continue
+        // Pad / truncate to exactly 12 months
+        const arr: Array<number | null> = []
+        for (let m = 0; m < 12; m++) {
+          const x = v[m]
+          if (x === null || x === undefined) arr.push(null)
+          else if (typeof x === 'number' && Number.isFinite(x)) arr.push(x)
+          else arr.push(null)
+        }
+        monthly[k as Carrier] = arr
+      }
+      if (Object.keys(monthly).length > 0) out.monthly = monthly
+    }
+    if (isObj(entry.annual)) {
+      out.annual = entry.annual as EnergyMap
+    }
+    if (typeof entry.notes === 'string') out.notes = entry.notes
+    return out
+  })
 }
 
 function parseRetrofit(r: unknown, idx: number, filename: string): Retrofit {
@@ -432,6 +467,15 @@ function assetToFrontmatter(a: Asset): Record<string, unknown> {
   if (a.mixed_use_split && a.mixed_use_split.length > 0) fm.mixed_use_split = a.mixed_use_split
   if (a.utility_prices) fm.utility_prices = a.utility_prices
   if (a.tags && a.tags.length > 0) fm.tags = a.tags
+  if (a.actuals && a.actuals.length > 0) {
+    fm.actuals = a.actuals.map(act => {
+      const o: Record<string, unknown> = { year: act.year }
+      if (act.monthly && Object.keys(act.monthly).length > 0) o.monthly = act.monthly
+      if (act.annual && Object.keys(act.annual).length > 0) o.annual = act.annual
+      if (act.notes) o.notes = act.notes
+      return o
+    })
+  }
   return fm
 }
 

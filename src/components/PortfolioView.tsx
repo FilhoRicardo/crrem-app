@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import Plotly from 'plotly.js-dist-min'
 import { useStore } from '../store'
-import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear } from '../engine/calculate'
+import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear, actualForYear } from '../engine/calculate'
 import { efProvider, pathwayProvider } from '../engine/providers'
 import { splitForAsset, regionForAsset, portfolioToMarkdown } from '../vault/loader'
 import type { Asset, Scenario, TrajectoryPoint } from '../engine/types'
@@ -26,7 +26,8 @@ function rollupAsset(
   const retrofits = scenario?.retrofits ?? []
   const trajectory: TrajectoryPoint[] = []
   for (let year = startYear; year <= endYear; year++) {
-    const energy = applyRetrofitsForYear(asset.energy, retrofits, year)
+    const actual = actualForYear(asset.actuals, year)
+    const energy = actual ?? applyRetrofitsForYear(asset.energy, retrofits, year)
     const metrics = calculateYearMetrics(energy, asset.gia_m2, efProvider, region, year)
     const pathway = blendPathway(pathwayProvider, region, split, year)
     trajectory.push({
@@ -35,6 +36,7 @@ function rollupAsset(
       pathway,
       misaligned_co2: metrics.carbon_intensity_kgco2e_m2 > pathway.carbon_kgco2e_m2,
       misaligned_eui: metrics.eui_kwh_m2 > pathway.eui_kwh_m2,
+      is_actual: actual !== null,
     })
   }
   return {
