@@ -4,9 +4,10 @@ import { useStore } from '../store'
 import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear, actualForYear } from '../engine/calculate'
 import { efProvider, pathwayProvider } from '../engine/providers'
 import { splitForAsset, regionForAsset, portfolioToMarkdown } from '../vault/loader'
-import type { Asset, Scenario, TrajectoryPoint } from '../engine/types'
+import type { Asset, Scenario, TrajectoryPoint, Portfolio } from '../engine/types'
 import { downloadText } from '../utils/download'
 import TemplateButton from './TemplateButton'
+import PortfolioForm, { emptyPortfolio } from './PortfolioForm'
 
 interface AssetRollup {
   asset: Asset
@@ -124,8 +125,14 @@ export default function PortfolioView() {
   const portfolios = useStore(s => s.portfolios)
   const selectedPortfolioId = useStore(s => s.selectedPortfolioId)
   const selectPortfolio = useStore(s => s.selectPortfolio)
+  const savePortfolio = useStore(s => s.savePortfolio)
+  const deletePortfolio = useStore(s => s.deletePortfolio)
+  const vaultMode = useStore(s => s.vaultMode)
+  const readOnly = vaultMode !== 'fsa'
   const allAssets = useStore(s => s.assets)
   const allScenarios = useStore(s => s.scenarios)
+  const [editing, setEditing] = useState<Portfolio | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const portfolio = useMemo(
     () => portfolios.find(p => p.id === selectedPortfolioId) ?? portfolios[0],
@@ -162,10 +169,80 @@ export default function PortfolioView() {
 
   const totalGia = rollups.reduce((s, r) => s + r.asset.gia_m2, 0)
 
+  const handleSave = async (p: Portfolio) => {
+    await savePortfolio(p)
+    setEditing(null)
+    setCreating(false)
+    selectPortfolio(p.id)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this portfolio? It will be moved to trash/portfolios/.')) return
+    await deletePortfolio(id)
+  }
+
+  if (creating) {
+    return (
+      <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
+        <PortfolioForm
+          initial={emptyPortfolio()}
+          isNew
+          existingIds={portfolios.map(p => p.id)}
+          onCancel={() => setCreating(false)}
+          onSave={handleSave}
+          readOnly={readOnly}
+        />
+      </main>
+    )
+  }
+
+  if (editing) {
+    return (
+      <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
+        <PortfolioForm
+          initial={editing}
+          isNew={false}
+          existingIds={portfolios.map(p => p.id).filter(id => id !== editing.id)}
+          onCancel={() => setEditing(null)}
+          onSave={handleSave}
+          readOnly={readOnly}
+        />
+      </main>
+    )
+  }
+
   if (!portfolio) {
     return (
-      <main className="flex-1 flex items-center justify-center bg-slate-50">
-        <p className="text-slate-400 italic">No portfolios in this vault. Add one to <code>portfolios/</code>.</p>
+      <main className="flex-1 overflow-y-auto bg-slate-50 p-6 flex flex-col gap-4">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-800">Portfolios</h2>
+            <p className="text-sm text-slate-500 mt-1">No portfolios in this vault yet.</p>
+          </div>
+          <div className="flex gap-2">
+            <TemplateButton kind="portfolio" />
+            <button
+              onClick={() => setCreating(true)}
+              disabled={readOnly}
+              className="text-sm px-4 py-2 rounded-lg bg-crrem-navy text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              title={readOnly ? 'Open a real vault to create' : 'Create your first portfolio'}
+            >
+              + New portfolio
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl mb-3">
+            📊
+          </div>
+          <p className="text-sm text-slate-500 max-w-sm mx-auto">
+            Portfolios let you roll up GIA-weighted CI and pathways across multiple assets.
+            {readOnly
+              ? ' Open a real vault to create one.'
+              : ' Click + New portfolio above to start.'}
+          </p>
+        </div>
       </main>
     )
   }
@@ -187,6 +264,29 @@ export default function PortfolioView() {
             title="Download this portfolio as .md"
           >
             <span>⬇</span> Download
+          </button>
+          <button
+            onClick={() => setEditing(portfolio)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
+            title="Edit this portfolio"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => handleDelete(portfolio.id)}
+            disabled={readOnly}
+            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to delete' : 'Delete this portfolio'}
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => setCreating(true)}
+            disabled={readOnly}
+            className="text-xs px-3 py-1.5 rounded-lg bg-crrem-navy text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to create' : 'New portfolio'}
+          >
+            + New
           </button>
           <select
             value={portfolio.id}

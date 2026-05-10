@@ -516,6 +516,20 @@ export async function deleteAsset(
   await softDelete(vault, 'assets', `${assetId}.md`)
 }
 
+export async function deletePortfolio(
+  vault: FileSystemDirectoryHandle,
+  portfolioId: string,
+): Promise<void> {
+  await softDelete(vault, 'portfolios', `${portfolioId}.md`)
+}
+
+export async function deleteECM(
+  vault: FileSystemDirectoryHandle,
+  ecmId: string,
+): Promise<void> {
+  await softDelete(vault, 'ecms', `${ecmId}.md`)
+}
+
 export async function deleteScenario(
   vault: FileSystemDirectoryHandle,
   scenarioId: string,

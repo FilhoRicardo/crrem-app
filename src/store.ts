@@ -3,9 +3,11 @@ import type { Asset, Scenario, ECM, Portfolio } from './engine/types'
 import {
   loadVault, loadSampleVault, requestVaultDirectory, ensureReadWritePermission,
   writeScenario as writeScenarioToVault, writeECM as writeECMToVault,
-  writeAsset as writeAssetToVault,
+  writeAsset as writeAssetToVault, writePortfolio as writePortfolioToVault,
   deleteScenario as deleteScenarioFromVault,
   deleteAsset as deleteAssetFromVault,
+  deletePortfolio as deletePortfolioFromVault,
+  deleteECM as deleteECMFromVault,
 } from './vault/loader'
 
 export type VaultMode = 'none' | 'sample' | 'fsa'
@@ -48,8 +50,11 @@ interface AppState {
   saveScenario: (scenario: Scenario) => Promise<void>
   deleteScenario: (scenarioId: string) => Promise<void>
   saveECM: (ecm: ECM) => Promise<void>
+  deleteECM: (ecmId: string) => Promise<void>
   saveAsset: (asset: Asset) => Promise<void>
   deleteAsset: (assetId: string) => Promise<void>
+  savePortfolio: (portfolio: Portfolio) => Promise<void>
+  deletePortfolio: (portfolioId: string) => Promise<void>
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -253,6 +258,52 @@ export const useStore = create<AppState>((set, get) => ({
         await deleteAssetFromVault(vaultDir, assetId)
       } catch (e) {
         set(s => ({ loadErrors: [...s.loadErrors, `Delete asset: ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
+
+  savePortfolio: async (portfolio) => {
+    const { vaultMode, vaultDir, portfolios, selectedPortfolioId } = get()
+    const next = portfolios.some(p => p.id === portfolio.id)
+      ? portfolios.map(p => (p.id === portfolio.id ? portfolio : p))
+      : [...portfolios, portfolio]
+    set({
+      portfolios: next,
+      selectedPortfolioId: selectedPortfolioId ?? portfolio.id,
+    })
+    if (vaultMode === 'fsa' && vaultDir) {
+      try {
+        await writePortfolioToVault(vaultDir, portfolio)
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Save portfolio "${portfolio.name}": ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
+
+  deletePortfolio: async (portfolioId) => {
+    const { vaultMode, vaultDir, portfolios, selectedPortfolioId } = get()
+    const remaining = portfolios.filter(p => p.id !== portfolioId)
+    set({
+      portfolios: remaining,
+      selectedPortfolioId: selectedPortfolioId === portfolioId ? (remaining[0]?.id ?? null) : selectedPortfolioId,
+    })
+    if (vaultMode === 'fsa' && vaultDir) {
+      try {
+        await deletePortfolioFromVault(vaultDir, portfolioId)
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Delete portfolio: ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
+
+  deleteECM: async (ecmId) => {
+    const { vaultMode, vaultDir, ecms } = get()
+    set({ ecms: ecms.filter(x => x.id !== ecmId) })
+    if (vaultMode === 'fsa' && vaultDir) {
+      try {
+        await deleteECMFromVault(vaultDir, ecmId)
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Delete ECM: ${e instanceof Error ? e.message : String(e)}`] }))
       }
     }
   },
