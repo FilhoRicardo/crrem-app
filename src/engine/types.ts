@@ -6,6 +6,7 @@ export type Carrier =
   | 'Gas'
   | 'Oil'
   | 'Biomass'
+  | 'Other_Fuels'
   | 'Renew_Consumed'
   | 'Renew_Exported'
 
@@ -18,6 +19,14 @@ export interface RetrofitImpact {
   /** 'percent': value is 0–100. 'absolute': value is kWh/yr. Ignored for 'remove'. */
   mode: 'percent' | 'absolute'
   value: number
+  note?: string
+}
+
+export interface RetrofitCost {
+  capex_total?: number
+  capex_per_m2?: number
+  capex_per_kwp?: number
+  currency?: string
 }
 
 export interface Retrofit {
@@ -25,7 +34,9 @@ export interface Retrofit {
   /** First year this retrofit is active (inclusive). */
   year: number
   name: string
+  ecm_id?: string
   impacts: RetrofitImpact[]
+  cost?: RetrofitCost
 }
 
 /** Per-year calculation output. */
@@ -76,4 +87,81 @@ export interface ProjectTrajectoryInput {
   retrofits: Retrofit[]
   startYear: number
   endYear: number
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Vault domain types (loaded from .md frontmatter)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface UtilityPrices {
+  Elec_Grid?: number
+  Gas?: number
+  Oil?: number
+  District_Heating?: number
+  District_Cooling?: number
+  Biomass?: number
+  Other_Fuels?: number
+  currency?: string
+}
+
+export interface Asset {
+  id: string
+  name: string
+  country: string
+  property_type: string
+  gia_m2: number
+  reporting_year: number
+  energy: EnergyMap
+  postal_code?: string
+  region?: string
+  mixed_use_split?: MixedUseSplit[]
+  utility_prices?: UtilityPrices
+  tags?: string[]
+  body?: string
+}
+
+export interface Scenario {
+  id: string
+  name: string
+  asset_id: string
+  parent_scenario_id?: string
+  retrofits: Retrofit[]
+  body?: string
+}
+
+export interface ECMImpact extends Omit<RetrofitImpact, 'value'> {
+  value_low?: number
+  value_typical: number
+  value_high?: number
+}
+
+export interface ECM {
+  id: string
+  name: string
+  category: string
+  version?: string
+  license?: string
+  summary?: string
+  applicability?: string
+  impacts: ECMImpact[]
+  cost?: RetrofitCost & {
+    capex_per_m2_low?: number
+    capex_per_m2_typical?: number
+    capex_per_m2_high?: number
+    capex_per_kwp_low?: number
+    capex_per_kwp_typical?: number
+    capex_per_kwp_high?: number
+  }
+  payback_years_range?: [number, number]
+  notes?: string
+  body?: string
+}
+
+export interface Portfolio {
+  id: string
+  name: string
+  asset_ids: string[]
+  weighting: 'gia'
+  scenario_overrides?: Record<string, string>
+  body?: string
 }

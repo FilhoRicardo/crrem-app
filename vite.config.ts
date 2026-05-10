@@ -7,6 +7,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Plotly + xlsx push the main bundle ~5 MB. Bump the precache cap so the
+        // service worker still caches the app shell for offline use.
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+      },
       manifest: {
         name: 'CRREM Admin',
         short_name: 'CRREM',
@@ -21,4 +27,15 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    chunkSizeWarningLimit: 6000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          plotly: ['plotly.js-dist-min'],
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
 })

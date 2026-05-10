@@ -36,27 +36,71 @@ npx vitest run     # run calc engine tests (must pass before any UI work)
 
 ```
 src/
-  engine/          # Pure-TS CRREM calc engine (no React deps)
-    types.ts       # Domain types: Carrier, EnergyMap, Retrofit, YearMetrics …
-    calculate.ts   # calculateYearMetrics, projectTrajectory, findMisalignmentYear …
-    calculate.test.ts  # 18 Vitest tests — validates against 4 fixture assets + portfolio
-  vault/           # (next) File System Access API loader + js-yaml parser
-  store.ts         # (next) Zustand app state
-  App.tsx          # Shell placeholder
+  engine/                # Pure-TS CRREM calc engine (no React deps)
+    types.ts             # Domain types: Carrier, EnergyMap, Retrofit, Asset, Scenario, ECM, Portfolio …
+    calculate.ts         # calculateYearMetrics, projectTrajectory, findMisalignmentYear …
+    calculate.test.ts    # 20 Vitest tests — validates against 4 fixture assets + portfolio
+    providers.ts         # EF + pathway providers (back-derived from fixture trajectories)
+  vault/
+    loader.ts            # FSA + js-yaml loader, validation, write/delete API, sample-vault fetch
+    fsa.d.ts             # File System Access API ambient declarations
+  components/
+    App shell + Header + VaultPicker + ErrorBoundary + LoadErrorBanner
+    AssetList + AssetDetail + StrandingChart + Timeline + RetrofitDrawer
+    ScenarioPanel + ECMLibrary + PortfolioView
+  store.ts               # Zustand app state (vault, assets, scenarios, ECMs, selection, save actions)
+  App.tsx                # Top-level shell with vault gate + view router
+  main.tsx               # React entry
 
-references/        # CRREM source data (xlsx + json + md schemas)
-  worked-examples-fixtures-v1.0.json   ← validation oracle for the calc engine
+public/
+  sample-vault/          # Bundled demo vault — accessible via "Try with sample" without FSA
+    assets/midtown-tower.md
+    scenarios/midtown-do-nothing.md, midtown-led-and-heatpump.md
+    ecms/led-lighting-upgrade.md, rooftop-pv.md, air-source-heat-pump.md
+    portfolios/sample-portfolio.md
+
+references/              # CRREM source data (xlsx + json + md schemas, NOT shipped)
+  worked-examples-fixtures-v1.0.json   ← validation oracle for the calc engine + providers
   pathways-v2.05.xlsx
   emission-factors-v2.05.xlsx
-  blueprint.md     ← full CRREM methodology spec
+  blueprint.md
   ecm-schema-v1.0.md
-  asset-schema-v1.0.md
-  scenario-schema-v1.0.md
-  portfolio-schema-v1.0.md
+  asset-schema-v1.0.md, scenario-schema-v1.0.md, portfolio-schema-v1.0.md
 ```
+
+## Vault structure
+
+The user picks a folder on disk; the app expects this layout:
+
+```
+my-portfolio-vault/
+├── assets/<id>.md      # one .md per building, YAML frontmatter + free-form notes
+├── scenarios/<id>.md   # one .md per scenario; references asset_id
+├── ecms/<id>.md        # ECM library (importable / exportable)
+├── portfolios/<id>.md  # GIA-weighted rollups
+└── trash/              # auto-created when scenarios are deleted (soft-delete)
+```
+
+A working example lives in `public/sample-vault/`. Open it directly with "Try sample" or copy the folder anywhere on disk and pick it via "Open vault folder".
+
+## Browser support
+
+The "Open vault folder" flow uses the **File System Access API**, which today is Chrome and Edge desktop only. Firefox and Safari users can still try the read-only sample vault.
+
+## Deploying to Vercel
+
+```bash
+npm i -g vercel       # one-off, if you don't have it
+vercel                # link the repo + deploy a preview
+vercel --prod         # ship to production
+```
+
+Or push the repo to GitHub and import it from the Vercel dashboard — `vercel.json` already declares the framework, build command, output directory and SPA rewrite rules.
+
+The build is fully static (no backend, no env vars required). Free-tier hosting is sufficient.
 
 ## Key documents
 
-- **`CLAUDE.md`** — coding guidelines + CRREM calculation rules (read before touching any code)
+- **`CLAUDE.md`** — coding guidelines + CRREM calculation rules
 - **`MEMORY.md`** — full session state, locked decisions, pending tasks
 - **`AGENT-HANDOFF.md`** — step-by-step playbook for the next dev/agent session
