@@ -3,8 +3,10 @@ import Plotly from 'plotly.js-dist-min'
 import { useStore } from '../store'
 import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear } from '../engine/calculate'
 import { efProvider, pathwayProvider } from '../engine/providers'
-import { splitForAsset, regionForAsset } from '../vault/loader'
+import { splitForAsset, regionForAsset, portfolioToMarkdown } from '../vault/loader'
 import type { Asset, Scenario, TrajectoryPoint } from '../engine/types'
+import { downloadText } from '../utils/download'
+import TemplateButton from './TemplateButton'
 
 interface AssetRollup {
   asset: Asset
@@ -168,20 +170,30 @@ export default function PortfolioView() {
 
   return (
     <main className="flex-1 overflow-y-auto bg-slate-50 p-6 flex flex-col gap-4">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-semibold text-slate-800">{portfolio.name}</h2>
           <p className="text-sm text-slate-500 mt-1">
             {rollups.length} asset{rollups.length === 1 ? '' : 's'} · {totalGia.toLocaleString()} m² total GIA · GIA-weighted
           </p>
         </div>
-        <select
-          value={portfolio.id}
-          onChange={e => selectPortfolio(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
-        >
-          {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <TemplateButton kind="portfolio" />
+          <button
+            onClick={() => downloadText(`${portfolio.id}.md`, portfolioToMarkdown(portfolio))}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
+            title="Download this portfolio as .md"
+          >
+            <span>⬇</span> Download
+          </button>
+          <select
+            value={portfolio.id}
+            onChange={e => selectPortfolio(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
+          >
+            {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="rounded-2xl overflow-hidden shadow border border-slate-700 bg-slate-900">

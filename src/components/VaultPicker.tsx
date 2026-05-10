@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { isFSASupported } from '../vault/loader'
+import TemplateButton from './TemplateButton'
 
 export default function VaultPicker() {
   const openVaultFromFSA = useStore(s => s.openVaultFromFSA)
@@ -82,6 +83,24 @@ export default function VaultPicker() {
           <p className="text-center text-xs text-slate-400 mt-4">
             Your data stays on your machine. No accounts, no servers.
           </p>
+
+          <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700">Vault file templates</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Download a blank <code>.md</code> for any vault file type. Open in Obsidian or any text editor,
+                  fill in the fields, drop into your vault folder.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <TemplateButton kind="asset" />
+              <TemplateButton kind="scenario" />
+              <TemplateButton kind="ecm" />
+              <TemplateButton kind="portfolio" />
+            </div>
+          </div>
         </div>
       </main>
     </div>

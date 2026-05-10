@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useStore } from '../store'
-import { parseFrontmatter } from '../vault/loader'
+import { parseFrontmatter, ecmToMarkdown } from '../vault/loader'
+import { downloadText } from '../utils/download'
+import { TEMPLATES } from '../utils/templates'
 import type { ECM, ECMImpact, Carrier } from '../engine/types'
 
 const CARRIERS: Carrier[] = [
@@ -119,30 +121,7 @@ export default function ECMLibrary() {
   }
 
   const handleExport = (ecm: ECM) => {
-    const yamlObj = {
-      doc_type: 'ecm',
-      ecm_schema: '1.0',
-      id: ecm.id,
-      name: ecm.name,
-      category: ecm.category,
-      version: ecm.version,
-      license: ecm.license,
-      summary: ecm.summary,
-      impacts: ecm.impacts,
-      cost: ecm.cost,
-    }
-    const yaml = Object.entries(yamlObj)
-      .filter(([, v]) => v !== undefined)
-      .map(([k, v]) => `${k}: ${typeof v === 'string' ? `"${v}"` : JSON.stringify(v)}`)
-      .join('\n')
-    const md = `---\n${yaml}\n---\n\n# ${ecm.name}\n\n${ecm.body ?? ''}`
-    const blob = new Blob([md], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${ecm.id}.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadText(`${ecm.id}.md`, ecmToMarkdown(ecm))
   }
 
   if (!open) return null
@@ -380,12 +359,19 @@ export default function ECMLibrary() {
             + Create ECM
           </button>
           <button
+            onClick={() => downloadText(TEMPLATES.ecm.filename, TEMPLATES.ecm.content)}
+            className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+            title="Download a blank ECM .md template"
+          >
+            ⬇ Template
+          </button>
+          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={readOnly}
             className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-600 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             title={readOnly ? 'Open a real vault to import' : 'Import an .md ECM file'}
           >
-            ⬆ Import .md
+            ⬆ Import
           </button>
         </div>
       </div>

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import type { Asset, EnergyMap, Carrier } from '../engine/types'
+import { assetToMarkdown } from '../vault/loader'
+import { downloadText } from '../utils/download'
+import TemplateButton from './TemplateButton'
 
 const CARRIERS: Carrier[] = [
   'Elec_Grid', 'District_Heating', 'District_Cooling', 'Gas', 'Oil', 'Biomass',
@@ -301,6 +304,7 @@ export default function PropertiesView() {
           </p>
         </div>
         <div className="flex gap-2">
+          <TemplateButton kind="asset" />
           <button
             onClick={() => setCreating(true)}
             disabled={readOnly}
@@ -357,6 +361,13 @@ export default function PropertiesView() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => downloadText(`${a.id}.md`, assetToMarkdown(a))}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-medium"
+                        title="Download this asset as a .md file"
+                      >
+                        ⬇
+                      </button>
                       <button
                         onClick={() => setEditing(a)}
                         className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-medium"

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import type { Scenario } from '../engine/types'
+import { scenarioToMarkdown } from '../vault/loader'
+import { downloadText } from '../utils/download'
+import TemplateButton from './TemplateButton'
 
 interface Props {
   assetId: string
@@ -62,16 +65,19 @@ export default function ScenarioPanel({ assetId, scenarios, activeIds, onToggle,
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <span className="text-sm font-semibold text-slate-700">Scenarios</span>
-        {!readOnly && (
-          <button
-            onClick={() => setShowNew(s => !s)}
-            className="text-xs text-white px-3 py-1.5 rounded-lg font-medium shadow-sm bg-crrem-navy"
-          >
-            + New scenario
-          </button>
-        )}
+        <div className="flex gap-2">
+          <TemplateButton kind="scenario" variant="ghost" />
+          {!readOnly && (
+            <button
+              onClick={() => setShowNew(s => !s)}
+              className="text-xs text-white px-3 py-1.5 rounded-lg font-medium shadow-sm bg-crrem-navy"
+            >
+              + New scenario
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -102,6 +108,16 @@ export default function ScenarioPanel({ assetId, scenarios, activeIds, onToggle,
                 <span className="text-xs text-slate-400">{s.retrofits.length} retrofit{s.retrofits.length === 1 ? '' : 's'}</span>
               )}
               <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke={colour} strokeWidth={2}/></svg>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  downloadText(`${s.id}.md`, scenarioToMarkdown(s))
+                }}
+                className="ml-1 text-slate-300 hover:text-crrem-navy text-sm leading-none"
+                title="Download as .md"
+              >
+                ⬇
+              </button>
               {!readOnly && (
                 <button
                   onClick={(e) => { e.preventDefault(); handleDelete(s.id) }}

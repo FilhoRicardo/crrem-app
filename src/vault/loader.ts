@@ -313,6 +313,52 @@ export async function loadVault(vault: FileSystemDirectoryHandle): Promise<Vault
 // Write API
 // ────────────────────────────────────────────────────────────────────────────
 
+export function assetToMarkdown(a: Asset): string {
+  const fm = assetToFrontmatter(a)
+  const body = a.body && a.body.trim().length > 0 ? a.body : `\n# ${a.name}\n`
+  return buildFrontmatter(fm, body)
+}
+
+export function scenarioToMarkdown(s: Scenario): string {
+  const fm = scenarioToFrontmatter(s)
+  const body = s.body && s.body.trim().length > 0 ? s.body : `\n# ${s.name}\n`
+  return buildFrontmatter(fm, body)
+}
+
+export function ecmToMarkdown(ecm: ECM): string {
+  const fm: Record<string, unknown> = {
+    doc_type: 'ecm',
+    ecm_schema: '1.0',
+    id: ecm.id,
+    name: ecm.name,
+    category: ecm.category,
+  }
+  if (ecm.version) fm.version = ecm.version
+  if (ecm.license) fm.license = ecm.license
+  if (ecm.summary) fm.summary = ecm.summary
+  if (ecm.applicability) fm.applicability = ecm.applicability
+  fm.impacts = ecm.impacts
+  if (ecm.cost) fm.cost = ecm.cost
+  if (ecm.payback_years_range) fm.payback_years_range = ecm.payback_years_range
+  if (ecm.notes) fm.notes = ecm.notes
+  const body = ecm.body && ecm.body.trim().length > 0 ? ecm.body : `\n# ${ecm.name}\n`
+  return buildFrontmatter(fm, body)
+}
+
+export function portfolioToMarkdown(p: Portfolio): string {
+  const fm: Record<string, unknown> = {
+    doc_type: 'portfolio',
+    portfolio_schema: '1.0',
+    id: p.id,
+    name: p.name,
+    asset_ids: p.asset_ids,
+    weighting: p.weighting,
+  }
+  if (p.scenario_overrides) fm.scenario_overrides = p.scenario_overrides
+  const body = p.body && p.body.trim().length > 0 ? p.body : `\n# ${p.name}\n`
+  return buildFrontmatter(fm, body)
+}
+
 function scenarioToFrontmatter(s: Scenario): Record<string, unknown> {
   const fm: Record<string, unknown> = {
     doc_type: 'scenario',
@@ -343,11 +389,7 @@ export async function writeScenario(
   const dir = await vault.getDirectoryHandle('scenarios', { create: true })
   const fileHandle = await dir.getFileHandle(`${scenario.id}.md`, { create: true })
   const writable = await fileHandle.createWritable()
-  const fm = scenarioToFrontmatter(scenario)
-  const body = scenario.body && scenario.body.trim().length > 0
-    ? scenario.body
-    : `\n# ${scenario.name}\n`
-  await writable.write(buildFrontmatter(fm, body))
+  await writable.write(scenarioToMarkdown(scenario))
   await writable.close()
 }
 
@@ -358,23 +400,18 @@ export async function writeECM(
   const dir = await vault.getDirectoryHandle('ecms', { create: true })
   const fileHandle = await dir.getFileHandle(`${ecm.id}.md`, { create: true })
   const writable = await fileHandle.createWritable()
-  const fm: Record<string, unknown> = {
-    doc_type: 'ecm',
-    ecm_schema: '1.0',
-    id: ecm.id,
-    name: ecm.name,
-    category: ecm.category,
-  }
-  if (ecm.version) fm.version = ecm.version
-  if (ecm.license) fm.license = ecm.license
-  if (ecm.summary) fm.summary = ecm.summary
-  if (ecm.applicability) fm.applicability = ecm.applicability
-  fm.impacts = ecm.impacts
-  if (ecm.cost) fm.cost = ecm.cost
-  if (ecm.payback_years_range) fm.payback_years_range = ecm.payback_years_range
-  if (ecm.notes) fm.notes = ecm.notes
-  const body = ecm.body && ecm.body.trim().length > 0 ? ecm.body : `\n# ${ecm.name}\n`
-  await writable.write(buildFrontmatter(fm, body))
+  await writable.write(ecmToMarkdown(ecm))
+  await writable.close()
+}
+
+export async function writePortfolio(
+  vault: FileSystemDirectoryHandle,
+  portfolio: Portfolio,
+): Promise<void> {
+  const dir = await vault.getDirectoryHandle('portfolios', { create: true })
+  const fileHandle = await dir.getFileHandle(`${portfolio.id}.md`, { create: true })
+  const writable = await fileHandle.createWritable()
+  await writable.write(portfolioToMarkdown(portfolio))
   await writable.close()
 }
 
@@ -405,9 +442,7 @@ export async function writeAsset(
   const dir = await vault.getDirectoryHandle('assets', { create: true })
   const fileHandle = await dir.getFileHandle(`${asset.id}.md`, { create: true })
   const writable = await fileHandle.createWritable()
-  const fm = assetToFrontmatter(asset)
-  const body = asset.body && asset.body.trim().length > 0 ? asset.body : `\n# ${asset.name}\n`
-  await writable.write(buildFrontmatter(fm, body))
+  await writable.write(assetToMarkdown(asset))
   await writable.close()
 }
 
@@ -463,8 +498,19 @@ export async function deleteScenario(
 // ────────────────────────────────────────────────────────────────────────────
 
 const SAMPLE_FILES = {
-  assets: ['midtown-tower.md'],
-  scenarios: ['midtown-do-nothing.md', 'midtown-led-and-heatpump.md'],
+  assets: [
+    'midtown-tower.md',
+    'pacific-plaza-mall.md',
+    'northgate-quarter.md',
+    'eastfield-logistics-park.md',
+  ],
+  scenarios: [
+    'midtown-do-nothing.md',
+    'midtown-led-and-heatpump.md',
+    'pacific-plaza-do-nothing.md',
+    'northgate-do-nothing.md',
+    'eastfield-do-nothing.md',
+  ],
   ecms: ['led-lighting-upgrade.md', 'rooftop-pv.md', 'air-source-heat-pump.md'],
   portfolios: ['sample-portfolio.md'],
 }

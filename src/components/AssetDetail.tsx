@@ -5,6 +5,8 @@ import Timeline from './Timeline'
 import RetrofitDrawer from './RetrofitDrawer'
 import ScenarioPanel from './ScenarioPanel'
 import { efProvider, pathwayProvider } from '../engine/providers'
+import { assetToMarkdown } from '../vault/loader'
+import { downloadText } from '../utils/download'
 import type { Asset, Scenario, Retrofit } from '../engine/types'
 
 const FLAGS: Record<string, string> = {
@@ -108,7 +110,7 @@ export default function AssetDetail({ asset }: Props) {
 
   return (
     <main className="flex-1 overflow-y-auto bg-slate-50 p-6 flex flex-col gap-4">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-semibold text-slate-800">{asset.name}</h2>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
@@ -121,6 +123,13 @@ export default function AssetDetail({ asset }: Props) {
             <span>Reporting year: {asset.reporting_year}</span>
           </div>
         </div>
+        <button
+          onClick={() => downloadText(`${asset.id}.md`, assetToMarkdown(asset))}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
+          title="Download this asset as .md"
+        >
+          <span>⬇</span> Download
+        </button>
       </div>
 
       <StrandingChart
