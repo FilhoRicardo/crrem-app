@@ -3,6 +3,7 @@ import type {
   Asset, Scenario, ECM, Portfolio, Retrofit, ECMImpact, MixedUseSplit, EnergyMap,
   YearActual, Carrier,
 } from '../engine/types'
+import { resolveCRREMRegion } from '../engine/providers'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Frontmatter
@@ -647,6 +648,12 @@ export function splitForAsset(asset: Asset): MixedUseSplit[] {
   return [{ propertyType: asset.property_type, fraction: 1 }]
 }
 
+/**
+ * Region resolution priority:
+ *   1. asset.region (explicit override the user typed)
+ *   2. postal-code lookup (USA / AUS / CAN sub-national)
+ *   3. canonicalised country name
+ */
 export function regionForAsset(asset: Asset): string {
-  return asset.region ?? asset.country
+  return resolveCRREMRegion(asset)
 }

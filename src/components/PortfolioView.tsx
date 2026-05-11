@@ -6,6 +6,7 @@ import { efProvider, pathwayProvider } from '../engine/providers'
 import { splitForAsset, regionForAsset, portfolioToMarkdown, importPortfolioFile } from '../vault/loader'
 import type { Asset, Scenario, TrajectoryPoint, Portfolio } from '../engine/types'
 import { downloadText } from '../utils/download'
+import { exportPortfolioReport } from '../utils/report'
 import TemplateButton from './TemplateButton'
 import ImportButton from './ImportButton'
 import PortfolioForm, { emptyPortfolio } from './PortfolioForm'
@@ -327,6 +328,44 @@ export default function PortfolioView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const reportRows = rollups.map(r => ({
+                asset: r.asset,
+                scenarioName: r.scenarioUsed?.name ?? null,
+                ci2024: r.trajectory[0].metrics.carbon_intensity_kgco2e_m2,
+                pathway2024: r.trajectory[0].pathway.carbon_kgco2e_m2,
+                misalignmentYear: r.misalignmentYear,
+                giaWeight: r.asset.gia_m2 / Math.max(totalGia, 1),
+              }))
+              const portfolioCi = reportRows.reduce((s, r) => s + r.ci2024 * r.giaWeight, 0)
+              const portfolioPw = reportRows.reduce((s, r) => s + r.pathway2024 * r.giaWeight, 0)
+              // Find the first year where the GIA-weighted portfolio CI > pathway
+              let pmYear: number | null = null
+              for (let i = 0; i < (rollups[0]?.trajectory.length ?? 0); i++) {
+                let ci = 0, pw = 0
+                for (const r of rollups) {
+                  const w = r.asset.gia_m2 / Math.max(totalGia, 1)
+                  ci += r.trajectory[i].metrics.carbon_intensity_kgco2e_m2 * w
+                  pw += r.trajectory[i].pathway.carbon_kgco2e_m2 * w
+                }
+                if (ci > pw) { pmYear = rollups[0].trajectory[i].year; break }
+              }
+              exportPortfolioReport({
+                portfolio,
+                rows: reportRows,
+                totalGia,
+                portfolioCi2024: portfolioCi,
+                portfolioPathway2024: portfolioPw,
+                portfolioMisalignmentYear: pmYear,
+                chartSelector: '.js-plotly-plot',
+              })
+            }}
+            className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium flex items-center gap-1.5 transition-colors"
+            title="Open a printable portfolio report — save as PDF from the print dialog"
+          >
+            <span>⎙</span> Export PDF
+          </button>
           <button
             onClick={() => downloadText(`${portfolio.id}.md`, portfolioToMarkdown(portfolio))}
             className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"

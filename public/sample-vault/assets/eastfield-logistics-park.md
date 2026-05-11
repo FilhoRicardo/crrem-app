@@ -4,7 +4,6 @@ asset_schema: "1.0"
 id: eastfield-logistics-park
 name: Eastfield Logistics Park
 country: Australia
-region: NSW
 postal_code: "2170"
 property_type: Distribution Warehouse Warm
 gia_m2: 15000

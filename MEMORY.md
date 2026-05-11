@@ -4,6 +4,73 @@
 
 ---
 
+## Data flow (one diagram, please keep in sync)
+
+```
+┌──────────────────────────┐         ┌──────────────────────────┐
+│   User's vault folder    │         │    references/ (repo)    │
+│   ─────────────────────  │         │   ───────────────────── │
+│   assets/*.md            │         │   worked-examples-       │
+│   scenarios/*.md         │         │     fixtures-v1.0.json   │
+│   ecms/*.md              │         │   pathways-v2.05.xlsx    │
+│   portfolios/*.md        │         │   emission-factors-…xlsx │
+│   trash/*/*.md           │         │   postal-code-lookup-…   │
+└────────────┬─────────────┘         └────────────┬─────────────┘
+             │ (FSA: read + write)                │ (build-time:
+             ▼                                    │  parsed → JSON)
+┌──────────────────────────┐                      ▼
+│   src/vault/loader.ts    │         ┌──────────────────────────┐
+│   ─────────────────────  │         │  src/engine/crrem-data.* │
+│   parseFrontmatter       │         │   ─────────────────────  │
+│   parse{Asset,Scenario,  │         │   per-region grid EFs    │
+│         ECM,Portfolio}   │         │   per region+type        │
+│   write{…,Asset,Sc,…}    │         │   pathway curves         │
+│   {Entity}ToMarkdown     │         │   postal-code → region   │
+│   import{Entity}File     │         └─────────────┬────────────┘
+└────────────┬─────────────┘                       │
+             │                                     │
+             ▼                                     ▼
+┌──────────────────────────┐         ┌──────────────────────────┐
+│       src/store.ts       │  reads  │  src/engine/providers.ts │
+│       (zustand)          │ ◄─────► │  efProvider              │
+│       ─────────────────  │         │  pathwayProvider         │
+│       assets[]           │         └─────────────┬────────────┘
+│       scenarios[]        │                       │
+│       ecms[]             │                       ▼
+│       portfolios[]       │         ┌──────────────────────────┐
+│       view, selection    │         │  src/engine/calculate.ts │
+│       save/delete actions│ ◄─────► │  applyRetrofitsForYear   │
+└────────────┬─────────────┘         │  calculateYearMetrics    │
+             │                       │  blendPathway            │
+             │                       │  projectTrajectory       │
+             │                       │  actualForYear           │
+             │                       │  findMisalignmentYear    │
+             │                       │  portfolioMetrics        │
+             │                       └─────────────┬────────────┘
+             │                                     │
+             ▼                                     ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    src/components/  (React + Plotly)              │
+│  ──────────────────────────────────────────────────────────────  │
+│  Header     · 4 tabs (Asset / Properties / Usage / Portfolio)    │
+│  AssetList  · sidebar with summariseAsset()                      │
+│  AssetDetail · StrandingChart + Timeline + RetrofitDrawer        │
+│              + ScenarioPanel                                     │
+│  Properties  · table + AssetForm + ActualsEditor                 │
+│  UsageView   · per-asset ActualsEditor                           │
+│  Portfolio   · pill row + chart + table + PortfolioForm          │
+│  ECMLibrary  · slide-over CRUD                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Rules of the road:
+- The engine never imports from `vault/` or `components/` — it's pure TS, takes EnergyMaps and EF/Pathway providers, returns metrics.
+- The loader never imports from `engine/` — it parses files into types and is otherwise dumb.
+- Components depend on store + engine + loader; they never poke disk directly.
+- Updates flow store → components via Zustand subscriptions; never the other way.
+
+---
+
 ## What this app does
 
 A retrofit-planning tool for CRREM assessments. User loads asset(s), the app shows the carbon trajectory vs the CRREM pathway (2024–2050). User clicks any year on a timeline → adds, edits, or removes retrofits → app recomputes the trajectory and revised misalignment year. Scenarios are saved and compared. Cost (capex + opex savings + payback) tracked alongside carbon math.

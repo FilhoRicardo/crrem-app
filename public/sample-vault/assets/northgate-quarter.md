@@ -4,7 +4,6 @@ asset_schema: "1.0"
 id: northgate-quarter
 name: Northgate Quarter
 country: United Kingdom
-region: UK
 postal_code: "EC1A"
 property_type: Mixed Use
 gia_m2: 12000

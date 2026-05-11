@@ -5,7 +5,6 @@ id: midtown-tower
 name: Midtown Tower
 country: USA
 postal_code: "10005"
-region: "USA-NY"
 property_type: Office
 gia_m2: 7500
 reporting_year: 2024

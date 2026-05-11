@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useStore } from './store'
 import VaultPicker from './components/VaultPicker'
 import Header from './components/Header'
@@ -15,6 +16,25 @@ export default function App() {
   const view = useStore(s => s.view)
   const assets = useStore(s => s.assets)
   const selectedAssetId = useStore(s => s.selectedAssetId)
+  const reloadVault = useStore(s => s.reloadVault)
+
+  // Auto-rescan the vault when the window regains focus.
+  // Lets the user edit .md files in Obsidian or any text editor and see changes
+  // here without clicking ↺ Sync. Only fires when an FSA vault is open
+  // (sample vault is fetched from the server and doesn't drift).
+  useEffect(() => {
+    if (vaultMode !== 'fsa') return
+    let lastRescan = 0
+    const onFocus = () => {
+      // Throttle: don't refire within 2s of the previous rescan.
+      const now = Date.now()
+      if (now - lastRescan < 2000) return
+      lastRescan = now
+      reloadVault()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [vaultMode, reloadVault])
 
   if (vaultMode === 'none') {
     return (

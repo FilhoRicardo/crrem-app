@@ -4,9 +4,12 @@ import StrandingChart, { buildScenarioTrajectories } from './StrandingChart'
 import Timeline from './Timeline'
 import RetrofitDrawer from './RetrofitDrawer'
 import ScenarioPanel from './ScenarioPanel'
+import CostSummaryCard from './CostSummaryCard'
 import { efProvider, pathwayProvider } from '../engine/providers'
+import { analyseScenarioCost } from '../engine/cost'
 import { assetToMarkdown } from '../vault/loader'
 import { downloadText } from '../utils/download'
+import { exportAssetReport } from '../utils/report'
 import type { Asset, Scenario, Retrofit } from '../engine/types'
 
 const FLAGS: Record<string, string> = {
@@ -123,13 +126,30 @@ export default function AssetDetail({ asset }: Props) {
             <span>Reporting year: {asset.reporting_year}</span>
           </div>
         </div>
-        <button
-          onClick={() => downloadText(`${asset.id}.md`, assetToMarkdown(asset))}
-          className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
-          title="Download this asset as .md"
-        >
-          <span>⬇</span> Download
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const cost = editScenario ? analyseScenarioCost(asset, editScenario.retrofits) : null
+              exportAssetReport({
+                asset,
+                scenario: editScenario,
+                costSummary: cost,
+                chartSelector: '.js-plotly-plot',
+              })
+            }}
+            className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium flex items-center gap-1.5 transition-colors"
+            title="Open a printable assessment report — save as PDF from the print dialog"
+          >
+            <span>⎙</span> Export PDF
+          </button>
+          <button
+            onClick={() => downloadText(`${asset.id}.md`, assetToMarkdown(asset))}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
+            title="Download this asset as .md"
+          >
+            <span>⬇</span> Download
+          </button>
+        </div>
       </div>
 
       <StrandingChart
@@ -171,6 +191,8 @@ export default function AssetDetail({ asset }: Props) {
             selectedYear={selectedYear}
             onSelectYear={setSelectedYear}
           />
+
+          <CostSummaryCard asset={asset} scenario={editScenario} />
 
           {selectedYear != null && (
             <RetrofitDrawer

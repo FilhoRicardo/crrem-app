@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { Asset, YearActual, Carrier } from '../engine/types'
+import { parseActualsCsv, mergeActuals, ACTUALS_CSV_TEMPLATE } from '../utils/csvActuals'
+import { downloadText } from '../utils/download'
 
 interface Props {
   asset: Pick<Asset, 'energy' | 'reporting_year' | 'actuals'>
@@ -20,6 +22,27 @@ function sumMonthly(arr: Array<number | null> | undefined): number {
 
 export default function ActualsEditor({ asset, onChange, readOnly }: Props) {
   const actuals = asset.actuals ?? []
+  const csvInputRef = useRef<HTMLInputElement>(null)
+
+  const handleCsvImport = async (file: File) => {
+    try {
+      const text = await file.text()
+      const { actuals: parsed, warnings } = parseActualsCsv(text)
+      if (parsed.length === 0) {
+        alert(`Couldn't parse any rows from ${file.name}.\n\n${warnings.join('\n')}`)
+        return
+      }
+      const merged = mergeActuals(actuals, parsed)
+      onChange(merged)
+      const yrSummary = parsed.map(p => p.year).join(', ')
+      const msg = warnings.length > 0
+        ? `Imported ${parsed.length} year(s): ${yrSummary}\n\nWarnings:\n${warnings.join('\n')}`
+        : `Imported ${parsed.length} year(s): ${yrSummary}`
+      alert(msg)
+    } catch (e) {
+      alert(`Failed to import ${file.name}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
   // Carriers to show: union of carriers in baseline + carriers in any actual.
   const carriers = useMemo<Carrier[]>(() => {
     const set = new Set<Carrier>()
@@ -96,7 +119,33 @@ export default function ActualsEditor({ asset, onChange, readOnly }: Props) {
             for any year you've recorded — the chart switches to a solid line for those years.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => downloadText('actuals-template.csv', ACTUALS_CSV_TEMPLATE, 'text/csv')}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
+            title="Download a CSV template you can fill in then re-upload"
+          >
+            <span>⬇</span> CSV template
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) handleCsvImport(file)
+              e.target.value = ''
+            }}
+          />
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            disabled={readOnly}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to import' : 'Bulk-import monthly readings from a CSV (Year, Month + carrier columns)'}
+          >
+            <span>⬆</span> Import CSV
+          </button>
           <input
             type="number"
             value={newYearInput}

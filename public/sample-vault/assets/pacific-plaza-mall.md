@@ -4,7 +4,6 @@ asset_schema: "1.0"
 id: pacific-plaza-mall
 name: Pacific Plaza Mall
 country: Hong Kong
-region: HK
 property_type: Shopping Center
 gia_m2: 22000
 reporting_year: 2024
