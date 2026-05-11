@@ -1,5 +1,6 @@
 import type { Asset, Carrier, Retrofit, EnergyMap } from './types'
 import { applyRetrofitsForYear } from './calculate'
+import { computeNPV, computeIRR, computePaybackYears, buildCashflows } from './finance'
 
 /**
  * Apply a compound annual escalator to a price. Returns the price `yearsAhead`
@@ -108,11 +109,27 @@ export interface ScenarioCostSummary {
   averagePaybackYears: number | null
   currency: string | null
   hasMissingPrices: boolean
+  /** NPV of the combined cashflow at the supplied discount rate. Null if savings null. */
+  npv: number | null
+  /** IRR (%/yr) of the combined cashflow. Null if no sign change in cashflows. */
+  irr: number | null
+  /** Discount rate (%/yr) used for NPV. */
+  discountRatePct: number
+  /** Horizon (years) over which NPV/IRR were computed. */
+  horizonYears: number
+}
+
+export interface FinanceParams {
+  /** Cost of capital, %/yr. Used to discount future savings. */
+  discountRatePct: number
+  /** Years of savings to project. Defaults to 25 (CRREM trajectory length). */
+  horizonYears?: number
 }
 
 export function analyseScenarioCost(
   asset: Pick<Asset, 'energy' | 'utility_prices' | 'reporting_year'>,
   retrofits: Retrofit[],
+  finance: FinanceParams = { discountRatePct: 0, horizonYears: 25 },
 ): ScenarioCostSummary {
   // Apply in chronological order so each retrofit's "prior" set is correct.
   const ordered = [...retrofits].sort((a, b) => a.year - b.year)
@@ -137,5 +154,39 @@ export function analyseScenarioCost(
 
   const currency = asset.utility_prices?.currency ?? perRetrofit[0]?.currency ?? null
 
-  return { perRetrofit, totalCapex, totalAnnualSavings, averagePaybackYears, currency, hasMissingPrices }
+  // Combined cashflow for the whole scenario, anchored at year 0 = first retrofit.
+  // Capex hits in the year of each retrofit; savings flow each year afterward.
+  const horizonYears = finance.horizonYears ?? 25
+  const discountRatePct = finance.discountRatePct
+  const escPct = asset.utility_prices?.escalation_pct_per_year ?? 0
+
+  let npv: number | null = null
+  let irr: number | null = null
+  if (totalAnnualSavings !== null && perRetrofit.length > 0) {
+    const startYear = ordered[0].year
+    // Build a per-year cashflow array indexed from the first retrofit's year.
+    const totalYears = horizonYears + 1
+    const cashflows = new Array<number>(totalYears).fill(0)
+    for (const r of perRetrofit) {
+      const ti = r.retrofit.year - startYear
+      if (ti >= 0 && ti < totalYears) cashflows[ti] -= r.capex
+      // Savings start the year after install.
+      if (r.annualSavings && r.annualSavings !== 0) {
+        for (let t = ti + 1; t < totalYears; t++) {
+          const yearsSinceInstall = t - ti - 1
+          cashflows[t] += r.annualSavings * Math.pow(1 + escPct / 100, yearsSinceInstall)
+        }
+      }
+    }
+    npv = computeNPV(cashflows, discountRatePct)
+    irr = computeIRR(cashflows)
+  }
+
+  return {
+    perRetrofit, totalCapex, totalAnnualSavings, averagePaybackYears, currency,
+    hasMissingPrices, npv, irr, discountRatePct, horizonYears,
+  }
 }
+
+// Re-export for the test file
+export { computeNPV, computeIRR, computePaybackYears, buildCashflows }

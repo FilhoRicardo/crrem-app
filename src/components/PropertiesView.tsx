@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Asset, EnergyMap, Carrier, YearActual } from '../engine/types'
 import { assetToMarkdown, importAssetFile } from '../vault/loader'
 import { downloadText } from '../utils/download'
 import { summariseAsset, flagForCountry } from '../engine/summary'
+import { parseAssetsCsv, ASSETS_CSV_TEMPLATE } from '../utils/csvAssets'
 import TemplateButton from './TemplateButton'
 import ActualsEditor from './ActualsEditor'
 import ImportButton from './ImportButton'
@@ -255,7 +256,27 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
             />
           </Field>
-          <div />
+          <Field label="Renew. degradation %/yr">
+            <input
+              type="number"
+              step={0.1}
+              min={0}
+              max={5}
+              value={draft.renewable_degradation_pct_per_year ?? ''}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setDraft({
+                  ...draft,
+                  renewable_degradation_pct_per_year:
+                    Number.isFinite(v) && v > 0 ? v : undefined,
+                })
+              }}
+              placeholder="0 (off)"
+              disabled={readOnly}
+              title="On-site renewables (PV, etc.) lose ~0.5%/yr typically. Applied to projected years only — measured actuals stay untouched."
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
+            />
+          </Field>
           {carriersWithDemand.length === 0 ? (
             <p className="col-span-3 text-xs text-slate-400 italic">
               Add baseline energy demand above first — prices show only for carriers with non-zero kWh.
@@ -328,6 +349,26 @@ export default function PropertiesView() {
   const [editing, setEditing] = useState<Asset | null>(null)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState('')
+  const csvInputRef = useRef<HTMLInputElement>(null)
+
+  const handleCsvImport = async (file: File) => {
+    try {
+      const text = await file.text()
+      const { assets: parsed, warnings } = parseAssetsCsv(text, assets.map(a => a.id))
+      if (parsed.length === 0) {
+        alert(`No assets parsed from ${file.name}.\n\n${warnings.join('\n')}`)
+        return
+      }
+      // Save sequentially to avoid FSA write contention.
+      for (const a of parsed) await saveAsset(a)
+      const msg = warnings.length > 0
+        ? `Imported ${parsed.length} asset(s).\n\nWarnings:\n${warnings.join('\n')}`
+        : `Imported ${parsed.length} asset(s).`
+      alert(msg)
+    } catch (e) {
+      alert(`Failed to import ${file.name}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
 
   const existingIds = assets.map(a => a.id)
 
@@ -410,6 +451,32 @@ export default function PropertiesView() {
             className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg w-48 focus:outline-none focus:border-crrem-navy"
           />
           <TemplateButton kind="asset" />
+          <button
+            onClick={() => downloadText('assets-template.csv', ASSETS_CSV_TEMPLATE, 'text/csv')}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
+            title="Download a CSV template you can fill in then re-upload to bulk-import many assets at once"
+          >
+            <span>⬇</span> Bulk CSV template
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) handleCsvImport(file)
+              e.target.value = ''
+            }}
+          />
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            disabled={readOnly}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to bulk-import' : 'Bulk-import many assets from a CSV (one row per asset)'}
+          >
+            <span>⬆</span> Bulk import CSV
+          </button>
           <ImportButton
             label="Import .md"
             disabled={readOnly}

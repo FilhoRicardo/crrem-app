@@ -59,10 +59,12 @@ function rollupAsset(
   }
 }
 
-function PortfolioChart({ rollups, totalGia, startYear, endYear }: {
+function PortfolioChart({ rollups, totalGia, startYear, endYear, plotRef }: {
   rollups: AssetRollup[], totalGia: number, startYear: number, endYear: number,
+  plotRef?: React.RefObject<HTMLDivElement | null>,
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const localRef = useRef<HTMLDivElement | null>(null)
+  const ref = plotRef ?? localRef
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -129,7 +131,7 @@ function PortfolioChart({ rollups, totalGia, startYear, endYear }: {
 
   useEffect(() => () => { if (ref.current) Plotly.purge(ref.current) }, [])
 
-  return <div ref={ref} style={{ height: 380 }} />
+  return <div ref={ref as React.RefObject<HTMLDivElement>} style={{ height: 380 }} />
 }
 
 export default function PortfolioView() {
@@ -144,6 +146,7 @@ export default function PortfolioView() {
   const allScenarios = useStore(s => s.scenarios)
   const [editing, setEditing] = useState<Portfolio | null>(null)
   const [creating, setCreating] = useState(false)
+  const portfolioChartRef = useRef<HTMLDivElement | null>(null)
 
   const portfolio = useMemo(
     () => portfolios.find(p => p.id === selectedPortfolioId) ?? portfolios[0],
@@ -367,7 +370,7 @@ export default function PortfolioView() {
                 portfolioCi2024: portfolioCi,
                 portfolioPathway2024: portfolioPw,
                 portfolioMisalignmentYear: pmYear,
-                chartSelector: '.js-plotly-plot',
+                chartElement: portfolioChartRef.current,
               })
             }}
             className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium flex items-center gap-1.5 transition-colors"
@@ -406,7 +409,7 @@ export default function PortfolioView() {
           <span className="text-slate-500 text-xs ml-2">2024–2050</span>
         </div>
         {rollups.length > 0 ? (
-          <PortfolioChart rollups={rollups} totalGia={totalGia} startYear={2024} endYear={2050} />
+          <PortfolioChart rollups={rollups} totalGia={totalGia} startYear={2024} endYear={2050} plotRef={portfolioChartRef} />
         ) : (
           <p className="p-8 text-center text-slate-400 italic">No matching assets found in vault.</p>
         )}

@@ -55,10 +55,9 @@ interface ChartImageOpts {
 }
 
 async function captureChartImage(
-  selector: string,
+  el: HTMLElement | null,
   opts: ChartImageOpts = {},
 ): Promise<string | null> {
-  const el = document.querySelector(selector) as HTMLElement | null
   if (!el) return null
   try {
     const dataUrl = await Plotly.toImage(el, { format: 'png', width: opts.width ?? 1000, height: opts.height ?? 400, scale: 2 })
@@ -92,13 +91,13 @@ export interface AssetReportInput {
   asset: Asset
   scenario: Scenario | null
   costSummary: ScenarioCostSummary | null
-  /** CSS selector for the StrandingChart's plot container. */
-  chartSelector?: string
+  /** Direct reference to the chart's Plotly-managed div (preferred). */
+  chartElement?: HTMLElement | null
 }
 
-export async function exportAssetReport({ asset, scenario, costSummary, chartSelector }: AssetReportInput): Promise<void> {
+export async function exportAssetReport({ asset, scenario, costSummary, chartElement }: AssetReportInput): Promise<void> {
   const summary = summariseAsset(asset, scenario ?? undefined)
-  const chartImg = chartSelector ? await captureChartImage(chartSelector, { width: 1100, height: 420 }) : null
+  const chartImg = await captureChartImage(chartElement ?? null, { width: 1100, height: 420 })
   const region = regionForAsset(asset)
 
   const stranded = summary.stranded
@@ -223,12 +222,12 @@ export interface PortfolioReportInput {
   portfolioCi2024: number
   portfolioPathway2024: number
   portfolioMisalignmentYear: number | null
-  chartSelector?: string
+  chartElement?: HTMLElement | null
 }
 
 export async function exportPortfolioReport(input: PortfolioReportInput): Promise<void> {
-  const { portfolio, rows, totalGia, portfolioCi2024, portfolioPathway2024, portfolioMisalignmentYear, chartSelector } = input
-  const chartImg = chartSelector ? await captureChartImage(chartSelector, { width: 1100, height: 420 }) : null
+  const { portfolio, rows, totalGia, portfolioCi2024, portfolioPathway2024, portfolioMisalignmentYear, chartElement } = input
+  const chartImg = await captureChartImage(chartElement ?? null, { width: 1100, height: 420 })
 
   const stranded = portfolioCi2024 > portfolioPathway2024
   const misalignBadge = portfolioMisalignmentYear == null

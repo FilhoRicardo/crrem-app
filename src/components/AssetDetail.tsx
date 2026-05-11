@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
-import StrandingChart, { buildScenarioTrajectories } from './StrandingChart'
+import StrandingChart, { buildScenarioTrajectories, type StrandingChartHandle } from './StrandingChart'
 import Timeline from './Timeline'
 import RetrofitDrawer from './RetrofitDrawer'
 import ScenarioPanel from './ScenarioPanel'
 import CostSummaryCard from './CostSummaryCard'
+import ScenarioCompare from './ScenarioCompare'
 import { efProvider, pathwayProvider } from '../engine/providers'
 import { analyseScenarioCost } from '../engine/cost'
 import { assetToMarkdown } from '../vault/loader'
@@ -24,6 +25,8 @@ interface Props {
 }
 
 export default function AssetDetail({ asset }: Props) {
+  const chartRef = useRef<StrandingChartHandle>(null)
+  const [showCompare, setShowCompare] = useState(false)
   const allScenarios = useStore(s => s.scenarios)
   const ecms = useStore(s => s.ecms)
   const activeIds = useStore(s => s.activeScenarioIds)
@@ -134,7 +137,7 @@ export default function AssetDetail({ asset }: Props) {
                 asset,
                 scenario: editScenario,
                 costSummary: cost,
-                chartSelector: '.js-plotly-plot',
+                chartElement: chartRef.current?.getPlotElement() ?? null,
               })
             }}
             className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium flex items-center gap-1.5 transition-colors"
@@ -153,6 +156,7 @@ export default function AssetDetail({ asset }: Props) {
       </div>
 
       <StrandingChart
+        ref={chartRef}
         asset={asset}
         scenarios={activeScenarios.length > 0 ? activeScenarios : assetScenarios.slice(0, 1)}
         getEF={efProvider}
@@ -169,20 +173,31 @@ export default function AssetDetail({ asset }: Props) {
 
       {editScenario && (
         <>
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between flex-wrap gap-2">
             <div>
               <span className="text-xs uppercase tracking-wider text-slate-400">Editing scenario</span>
               <div className="text-sm font-semibold text-slate-700 mt-0.5">{editScenario.name}</div>
             </div>
-            <select
-              value={editScenario.id}
-              onChange={e => setEditScenarioId(e.target.value)}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
-            >
-              {assetScenarios.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              {assetScenarios.length >= 2 && (
+                <button
+                  onClick={() => setShowCompare(true)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium transition-colors"
+                  title="Compare two scenarios side-by-side with a delta on every metric"
+                >
+                  ⇄ Compare scenarios
+                </button>
+              )}
+              <select
+                value={editScenario.id}
+                onChange={e => setEditScenarioId(e.target.value)}
+                className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
+              >
+                {assetScenarios.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <Timeline
@@ -206,6 +221,16 @@ export default function AssetDetail({ asset }: Props) {
             />
           )}
         </>
+      )}
+
+      {showCompare && (
+        <ScenarioCompare
+          asset={asset}
+          scenarios={assetScenarios}
+          initialBaselineId={assetScenarios[0]?.id ?? null}
+          initialAlternativeId={editScenario?.id ?? assetScenarios[1]?.id ?? null}
+          onClose={() => setShowCompare(false)}
+        />
       )}
     </main>
   )

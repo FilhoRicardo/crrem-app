@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, forwardRef } from 'react'
 import Plotly from 'plotly.js-dist-min'
 import type { Asset, Scenario, EFProvider, PathwayProvider, TrajectoryPoint } from '../engine/types'
 import { projectTrajectory, findMisalignmentYear, actualForYear } from '../engine/calculate'
@@ -11,6 +11,12 @@ interface Props {
   getPathway: PathwayProvider
   startYear?: number
   endYear?: number
+}
+
+/** Imperative handle exposed to parents for chart-image capture (PDF export). */
+export interface StrandingChartHandle {
+  /** The Plotly-managed div. Pass directly to Plotly.toImage() / report builders. */
+  getPlotElement: () => HTMLDivElement | null
 }
 
 const PALETTE = ['#2d7a4f', '#1e3a5f', '#d97706', '#7c3aed', '#0891b2', '#dc2626', '#0d9488']
@@ -51,11 +57,14 @@ export function buildScenarioTrajectories(
   })
 }
 
-export default function StrandingChart({
-  asset, scenarios, getEF, getPathway,
-  startYear = 2024, endYear = 2050,
-}: Props) {
+function StrandingChartImpl(
+  { asset, scenarios, getEF, getPathway, startYear = 2024, endYear = 2050 }: Props,
+  forwardedRef: React.ForwardedRef<StrandingChartHandle>,
+) {
   const ref = useRef<HTMLDivElement>(null)
+  useImperativeHandle(forwardedRef, () => ({
+    getPlotElement: () => ref.current,
+  }), [])
 
   const series = useMemo(
     () => buildScenarioTrajectories(asset, scenarios, getEF, getPathway, startYear, endYear),
@@ -215,3 +224,8 @@ export default function StrandingChart({
     </div>
   )
 }
+
+const StrandingChart = forwardRef<StrandingChartHandle, Props>(StrandingChartImpl)
+StrandingChart.displayName = 'StrandingChart'
+export default StrandingChart
+
