@@ -261,13 +261,72 @@ export default function PortfolioView() {
     <main className="flex-1 overflow-y-auto bg-slate-50 p-6 flex flex-col gap-4">
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">{portfolio.name}</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Portfolios</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {rollups.length} asset{rollups.length === 1 ? '' : 's'} · {totalGia.toLocaleString()} m² total GIA · GIA-weighted
+            {portfolios.length} portfolio{portfolios.length === 1 ? '' : 's'} in this vault · GIA-weighted rollup
           </p>
         </div>
         <div className="flex items-center gap-2">
           <TemplateButton kind="portfolio" />
+          <ImportButton
+            label="Import .md"
+            disabled={readOnly}
+            onImport={async file => {
+              const p = await importPortfolioFile(file)
+              await savePortfolio(p)
+              selectPortfolio(p.id)
+            }}
+          />
+          <button
+            onClick={() => setCreating(true)}
+            disabled={readOnly}
+            className="text-sm px-4 py-2 rounded-lg bg-crrem-navy text-white font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title={readOnly ? 'Open a real vault to create' : 'New portfolio'}
+          >
+            + New portfolio
+          </button>
+        </div>
+      </div>
+
+      {/* Portfolio pill row — always visible so all portfolios are one click away */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">
+        {portfolios.map(p => {
+          const active = p.id === portfolio.id
+          return (
+            <button
+              key={p.id}
+              onClick={() => selectPortfolio(p.id)}
+              className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                active
+                  ? 'bg-crrem-navy text-white'
+                  : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {p.name}
+              <span className={`ml-1.5 text-xs ${active ? 'text-white/60' : 'text-slate-400'}`}>
+                {p.asset_ids.length}
+              </span>
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setCreating(true)}
+          disabled={readOnly}
+          className="text-sm px-3 py-1.5 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 hover:border-crrem-navy hover:text-crrem-navy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          + New
+        </button>
+      </div>
+
+      {/* Selected portfolio header row */}
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">{portfolio.name}</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {rollups.length} asset{rollups.length === 1 ? '' : 's'} · {totalGia.toLocaleString()} m² total GIA
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => downloadText(`${portfolio.id}.md`, portfolioToMarkdown(portfolio))}
             className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-1.5"
@@ -290,30 +349,6 @@ export default function PortfolioView() {
           >
             Delete
           </button>
-          <ImportButton
-            label="Import"
-            disabled={readOnly}
-            onImport={async file => {
-              const p = await importPortfolioFile(file)
-              await savePortfolio(p)
-              selectPortfolio(p.id)
-            }}
-          />
-          <button
-            onClick={() => setCreating(true)}
-            disabled={readOnly}
-            className="text-xs px-3 py-1.5 rounded-lg bg-crrem-navy text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-            title={readOnly ? 'Open a real vault to create' : 'New portfolio'}
-          >
-            + New
-          </button>
-          <select
-            value={portfolio.id}
-            onChange={e => selectPortfolio(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
-          >
-            {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
         </div>
       </div>
 

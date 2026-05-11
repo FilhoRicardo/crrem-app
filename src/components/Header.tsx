@@ -49,6 +49,10 @@ export default function Header() {
             className={`text-xs px-3 py-1.5 transition-colors ${view === 'properties' ? 'bg-white/20' : 'hover:bg-white/15'}`}
           >Properties</button>
           <button
+            onClick={() => setView('usage')}
+            className={`text-xs px-3 py-1.5 transition-colors ${view === 'usage' ? 'bg-white/20' : 'hover:bg-white/15'}`}
+          >Usage</button>
+          <button
             onClick={() => setView('portfolio')}
             className={`text-xs px-3 py-1.5 transition-colors ${view === 'portfolio' ? 'bg-white/20' : 'hover:bg-white/15'}`}
           >Portfolio</button>

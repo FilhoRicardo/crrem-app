@@ -11,7 +11,7 @@ import {
 } from './vault/loader'
 
 export type VaultMode = 'none' | 'sample' | 'fsa'
-export type ViewMode = 'asset' | 'portfolio' | 'properties'
+export type ViewMode = 'asset' | 'portfolio' | 'properties' | 'usage'
 
 interface AppState {
   // Vault state — vaultDir is non-serialisable; do NOT add persist middleware.

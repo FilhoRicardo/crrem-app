@@ -5,6 +5,7 @@ import AssetList from './components/AssetList'
 import AssetDetail from './components/AssetDetail'
 import PortfolioView from './components/PortfolioView'
 import PropertiesView from './components/PropertiesView'
+import UsageView from './components/UsageView'
 import ECMLibrary from './components/ECMLibrary'
 import ErrorBoundary from './components/ErrorBoundary'
 import LoadErrorBanner from './components/LoadErrorBanner'
@@ -44,6 +45,7 @@ export default function App() {
             </>
           )}
           {view === 'properties' && <PropertiesView />}
+          {view === 'usage' && <UsageView />}
           {view === 'portfolio' && <PortfolioView />}
         </div>
         <ECMLibrary />
