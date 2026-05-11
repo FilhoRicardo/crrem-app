@@ -7,23 +7,29 @@ const __filename = fileURLToPath(import.meta.url)
 const ROOT = dirname(dirname(__filename))
 const REF = join(ROOT, 'references')
 
-function dump(file: string, sheetName: string, startRow: number, nRows: number, nCols: number) {
-  const wb = XLSX.read(readFileSync(join(REF, file)), { type: 'buffer' })
-  const sheet = wb.Sheets[sheetName]
-  if (!sheet) { console.log(`No sheet "${sheetName}"`); return }
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true })
-  console.log(`\n=== ${file} :: ${sheetName} (${rows.length} total rows; showing ${startRow}-${startRow + nRows - 1}) ===`)
-  for (let r = startRow; r < Math.min(startRow + nRows, rows.length); r++) {
-    const row = (rows[r] ?? []).slice(0, nCols)
-    console.log(`r${r}:`, JSON.stringify(row))
+const wb = XLSX.read(readFileSync(join(REF, 'hdd-cdd-eu-v2.05.xlsx')), { type: 'buffer' })
+const sheet = wb.Sheets['HDD CDD Zip Code Matching 2024']
+const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true })
+
+// Find UK rows + check if there's an aggregate (null ZIP) row anywhere
+let firstUk = -1, ukAggregate = -1
+for (let r = 1; r < rows.length; r++) {
+  const country = rows[r]?.[1]
+  if (country === 'United Kingdom') {
+    if (firstUk < 0) firstUk = r
+    if (rows[r]?.[0] === null && ukAggregate < 0) ukAggregate = r
   }
 }
+console.log('First UK row:', firstUk)
+console.log('UK aggregate row (null ZIP):', ukAggregate)
+if (firstUk >= 0) {
+  console.log('Row at firstUk:', JSON.stringify(rows[firstUk]?.slice(0, 13)))
+}
+console.log()
 
-// Check geographic spread + last data rows
-dump('pathways-v2.05.xlsx', 'CO2 Pathways (sqm)', 200, 5, 8)
-dump('pathways-v2.05.xlsx', 'CO2 Pathways (sqm)', 700, 5, 8)
-dump('pathways-v2.05.xlsx', 'CO2 Pathways (sqm)', 1100, 5, 8)
-dump('pathways-v2.05.xlsx', 'CO2 Pathways (sqm)', 1490, 12, 8)
-
-// And the EF sheet — find where grid EF table ends + static EFs begin
-dump('emission-factors-v2.05.xlsx', 'Emission Factors', 50, 35, 12)
+// Check all aggregate rows
+const aggregates = []
+for (let r = 1; r < rows.length; r++) {
+  if (rows[r]?.[0] === null && rows[r]?.[1]) aggregates.push(rows[r]?.[1])
+}
+console.log(`${aggregates.length} aggregate rows total:`, aggregates)

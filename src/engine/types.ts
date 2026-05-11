@@ -101,6 +101,12 @@ export interface ProjectTrajectoryInput {
    * untouched). Defaults to 0 (off) — opt in per asset.
    */
   renewableDegradationPctPerYear?: number
+  /**
+   * Optional climate adjustment factors per year. Applied to projected years
+   * only (actuals stay untouched). Returning null = no adjustment for that year.
+   * Typically wired up by `getClimateFactors(country, year, scenario)`.
+   */
+  getClimateFactors?: (year: number) => { heatingFactor: number; coolingFactor: number } | null
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -167,6 +173,14 @@ export interface Asset {
    * stay reproducible. Set per-asset, e.g. `renewable_degradation_pct_per_year: 0.5`.
    */
   renewable_degradation_pct_per_year?: number
+  /**
+   * CRREM HDD/CDD climate adjustment scenario for this asset.
+   * - undefined / 'none' (default): no adjustment, energy demand stays flat
+   * - 'rcp45': IPCC RCP 4.5 (medium scenario) — heating drops, cooling rises
+   * - 'rcp85': IPCC RCP 8.5 (high-emissions, worst-case)
+   * Only available for European countries in CRREM v2.05.
+   */
+  climate_scenario?: 'none' | 'rcp45' | 'rcp85'
   body?: string
 }
 

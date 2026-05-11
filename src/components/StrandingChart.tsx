@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, forwardRef } from 'rea
 import Plotly from 'plotly.js-dist-min'
 import type { Asset, Scenario, EFProvider, PathwayProvider, TrajectoryPoint } from '../engine/types'
 import { projectTrajectory, findMisalignmentYear, actualForYear } from '../engine/calculate'
+import { getClimateFactors } from '../engine/providers'
 import { splitForAsset, regionForAsset } from '../vault/loader'
 
 interface Props {
@@ -51,6 +52,9 @@ export function buildScenarioTrajectories(
       endYear,
       getActual,
       renewableDegradationPctPerYear: asset.renewable_degradation_pct_per_year,
+      getClimateFactors: asset.climate_scenario && asset.climate_scenario !== 'none'
+        ? (year) => getClimateFactors(asset.country, year, asset.climate_scenario!)
+        : undefined,
     })
     const misalignmentYear = findMisalignmentYear(trajectory).co2
     return { scenario, trajectory, misalignmentYear }

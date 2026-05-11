@@ -127,7 +127,7 @@ export function blendPathway(
 export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoint[] {
   const {
     baseEnergy, gia, getEF, getPathway, region, split, retrofits,
-    startYear, endYear, getActual, renewableDegradationPctPerYear,
+    startYear, endYear, getActual, renewableDegradationPctPerYear, getClimateFactors,
   } = input
   const points: TrajectoryPoint[] = []
 
@@ -135,12 +135,16 @@ export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoin
     const actual = getActual?.(year) ?? null
     let energy: EnergyMap
     if (actual !== null) {
-      energy = actual  // Measured — never degraded.
+      energy = actual  // Measured — never adjusted.
     } else {
-      const projected = applyRetrofitsForYear(baseEnergy, retrofits, year)
-      energy = renewableDegradationPctPerYear
-        ? applyRenewableDegradation(projected, year - startYear, renewableDegradationPctPerYear)
-        : projected
+      let projected = applyRetrofitsForYear(baseEnergy, retrofits, year)
+      if (renewableDegradationPctPerYear) {
+        projected = applyRenewableDegradation(projected, year - startYear, renewableDegradationPctPerYear)
+      }
+      if (getClimateFactors) {
+        projected = applyClimateAdjustment(projected, getClimateFactors(year))
+      }
+      energy = projected
     }
     const metrics = calculateYearMetrics(energy, gia, getEF, region, year)
     const pathway = blendPathway(getPathway, region, split, year)
@@ -155,6 +159,40 @@ export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoin
     })
   }
   return points
+}
+
+/**
+ * CRREM heating-vs-cooling carrier classification used by climate adjustment.
+ * Elec_Grid is treated as MIXED — without sub-metering we can't split it, so
+ * we leave it untouched (consistent with CRREM's "apply only where you can
+ * confidently attribute the load" guidance).
+ */
+const HEATING_CARRIERS: Carrier[] = ['District_Heating', 'Gas', 'Oil', 'Biomass', 'Other_Fuels']
+const COOLING_CARRIERS: Carrier[] = ['District_Cooling']
+
+/**
+ * Apply CRREM HDD/CDD climate adjustment to an EnergyMap.
+ *
+ * Heating-related carriers scale by the heating factor (HDD growth ratio).
+ * Cooling-related carriers scale by the cooling factor (CDD growth ratio).
+ * Elec_Grid stays untouched — without sub-metering we can't split it.
+ *
+ * Pure function, returns a new map.
+ */
+export function applyClimateAdjustment(
+  energy: EnergyMap,
+  factors: { heatingFactor: number; coolingFactor: number } | null,
+): EnergyMap {
+  if (!factors) return energy
+  if (factors.heatingFactor === 1 && factors.coolingFactor === 1) return energy
+  const out: EnergyMap = { ...energy }
+  for (const c of HEATING_CARRIERS) {
+    if (out[c]) out[c] = out[c]! * factors.heatingFactor
+  }
+  for (const c of COOLING_CARRIERS) {
+    if (out[c]) out[c] = out[c]! * factors.coolingFactor
+  }
+  return out
 }
 
 /**

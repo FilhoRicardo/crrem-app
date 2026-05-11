@@ -13,6 +13,52 @@ const GRID_EFS = data.gridEFs as Record<string, GridCurve>
 const STATIC_EFS = data.staticEFs as Partial<Record<string, number>>
 const POSTAL_CODES = data.postalCodes as Record<string, Record<string, string>>
 
+interface ClimateRow {
+  baselineYear: number
+  cddBase: number; cdd45Pa: number; cdd85Pa: number
+  hddBase: number; hdd45Pa: number; hdd85Pa: number
+}
+const CLIMATE = (data as { climate?: Record<string, ClimateRow> }).climate ?? {}
+
+/**
+ * CRREM RCP scenario for HDD/CDD adjustment.
+ * - 'rcp45' (medium-emissions, default) — moderate warming, IPCC's middle path
+ * - 'rcp85' (high-emissions) — worst-case business-as-usual
+ * - 'none' (off) — no climate adjustment, energy demand stays flat
+ */
+export type ClimateScenario = 'none' | 'rcp45' | 'rcp85'
+
+/**
+ * Heating + cooling adjustment factors for `year` vs the asset's
+ * reporting year, given the country's climate row.
+ *
+ * factor = (1 + pa/100) ^ (year - baselineYear)
+ *
+ * Returns null when climate data isn't available for `country`.
+ */
+export function getClimateFactors(
+  country: string,
+  year: number,
+  scenario: ClimateScenario = 'rcp45',
+): { heatingFactor: number; coolingFactor: number } | null {
+  if (scenario === 'none') return { heatingFactor: 1, coolingFactor: 1 }
+  const row = CLIMATE[country] ?? CLIMATE[canonCountry(country)]
+  if (!row) return null
+  const yrs = year - row.baselineYear
+  if (yrs === 0) return { heatingFactor: 1, coolingFactor: 1 }
+  const hddPa = scenario === 'rcp85' ? row.hdd85Pa : row.hdd45Pa
+  const cddPa = scenario === 'rcp85' ? row.cdd85Pa : row.cdd45Pa
+  return {
+    heatingFactor: Math.pow(1 + hddPa / 100, yrs),
+    coolingFactor: Math.pow(1 + cddPa / 100, yrs),
+  }
+}
+
+/** True when the bundled CRREM v2.05 ships HDD/CDD data for this country. */
+export function hasClimateData(country: string): boolean {
+  return !!(CLIMATE[country] ?? CLIMATE[canonCountry(country)])
+}
+
 export const CRREM_DATA_META = data.meta as {
   generated: string
   source: string

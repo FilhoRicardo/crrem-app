@@ -256,6 +256,58 @@ for (const e of postalEntries) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HDD / CDD climate adjustment factors (EU 30 countries, v2.05)
+//
+// hdd-cdd-eu-v2.05.xlsx ships:
+//   - HDD_2024 / CDD_2024 baseline degree-days
+//   - HDD_45_pa / CDD_45_pa : annual %-change under RCP 4.5 (medium scenario)
+//   - HDD_85_pa / CDD_85_pa : annual %-change under RCP 8.5 (high scenario)
+//
+// Per CRREM method, heating-related energy in year Y scales by HDD growth
+// vs baseline; cooling-related by CDD growth. HDD_pa is negative (warmer →
+// less heat), CDD_pa is positive (warmer → more cooling).
+//
+// We extract only the country-aggregate rows (where ZIP Code cell is null)
+// to keep payload tiny. ZIP-level adjustment is deferred.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ClimateRow {
+  baselineYear: number
+  cddBase: number; cdd45Pa: number; cdd85Pa: number
+  hddBase: number; hdd45Pa: number; hdd85Pa: number
+}
+
+const climate: Record<string, ClimateRow> = {}
+try {
+  const wbClim = loadWorkbook('hdd-cdd-eu-v2.05.xlsx')
+  const sheet = wbClim.Sheets['HDD CDD Zip Code Matching 2024']
+  if (sheet) {
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true })
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r]
+      if (!row) continue
+      if (row[0] !== null) continue  // country aggregate rows have null ZIP Code
+      const country = asString(row[1])
+      if (!country || climate[country]) continue
+      // _pa rates are what drive the adjustment (factor doesn't use the baseline)
+      // — accept the country even if baseline values are null (UK, Switzerland)
+      const cdd45Pa = asNumber(row[8])
+      const hdd45Pa = asNumber(row[11])
+      if (cdd45Pa === null && hdd45Pa === null) continue
+      climate[country] = {
+        baselineYear: 2024,
+        cddBase: asNumber(row[7]) ?? 0,
+        cdd45Pa: cdd45Pa ?? 0, cdd85Pa: asNumber(row[9]) ?? 0,
+        hddBase: asNumber(row[10]) ?? 0,
+        hdd45Pa: hdd45Pa ?? 0, hdd85Pa: asNumber(row[12]) ?? 0,
+      }
+    }
+  }
+} catch (e) {
+  console.warn('Climate parse skipped:', e instanceof Error ? e.message : e)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Write
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -270,12 +322,14 @@ const output = {
       staticEFCarriers: Object.keys(staticEFs).length,
       postalCountries: Object.keys(postalCodes).length,
       postalEntries: Object.values(postalCodes).reduce((s, r) => s + Object.keys(r).length, 0),
+      climateCountries: Object.keys(climate).length,
     },
   },
   pathways,
   gridEFs,
   staticEFs,
   postalCodes,
+  climate,
 }
 
 mkdirSync(dirname(OUT), { recursive: true })
@@ -286,6 +340,7 @@ console.log(`  ${output.meta.counts.pathwayRegions} pathway regions, ${output.me
 console.log(`  ${output.meta.counts.gridEFRegions} grid-EF regions`)
 console.log(`  ${output.meta.counts.staticEFCarriers} static-carrier EFs`)
 console.log(`  ${output.meta.counts.postalCountries} postal-code countries (${output.meta.counts.postalEntries} entries)`)
+console.log(`  ${output.meta.counts.climateCountries} HDD/CDD climate countries`)
 
 // Sample
 const samples = [

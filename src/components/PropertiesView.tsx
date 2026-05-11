@@ -277,6 +277,22 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
             />
           </Field>
+          <Field label="Climate adjustment (HDD/CDD)">
+            <select
+              value={draft.climate_scenario ?? 'none'}
+              onChange={e => {
+                const v = e.target.value as 'none' | 'rcp45' | 'rcp85'
+                setDraft({ ...draft, climate_scenario: v === 'none' ? undefined : v })
+              }}
+              disabled={readOnly}
+              title="Scale heating/cooling demand by projected HDD/CDD changes. CRREM v2.05 ships data for 30 European countries — non-EU assets are a no-op."
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
+            >
+              <option value="none">none (off)</option>
+              <option value="rcp45">RCP 4.5 (medium scenario)</option>
+              <option value="rcp85">RCP 8.5 (high-emissions)</option>
+            </select>
+          </Field>
           {carriersWithDemand.length === 0 ? (
             <p className="col-span-3 text-xs text-slate-400 italic">
               Add baseline energy demand above first — prices show only for carriers with non-zero kWh.

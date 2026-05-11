@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import Plotly from 'plotly.js-dist-min'
 import { useStore } from '../store'
-import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear, actualForYear, applyRenewableDegradation } from '../engine/calculate'
-import { efProvider, pathwayProvider } from '../engine/providers'
+import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear, actualForYear, applyRenewableDegradation, applyClimateAdjustment } from '../engine/calculate'
+import { efProvider, pathwayProvider, getClimateFactors } from '../engine/providers'
 import { splitForAsset, regionForAsset, portfolioToMarkdown, importPortfolioFile } from '../vault/loader'
 import type { Asset, Scenario, TrajectoryPoint, Portfolio } from '../engine/types'
 import { downloadText } from '../utils/download'
@@ -29,16 +29,19 @@ function rollupAsset(
   const retrofits = scenario?.retrofits ?? []
   const trajectory: TrajectoryPoint[] = []
   const degPct = asset.renewable_degradation_pct_per_year
+  const climateScenario = asset.climate_scenario
   for (let year = startYear; year <= endYear; year++) {
     const actual = actualForYear(asset.actuals, year)
     let energy
     if (actual !== null) {
       energy = actual
     } else {
-      const projected = applyRetrofitsForYear(asset.energy, retrofits, year)
-      energy = degPct
-        ? applyRenewableDegradation(projected, year - startYear, degPct)
-        : projected
+      let projected = applyRetrofitsForYear(asset.energy, retrofits, year)
+      if (degPct) projected = applyRenewableDegradation(projected, year - startYear, degPct)
+      if (climateScenario && climateScenario !== 'none') {
+        projected = applyClimateAdjustment(projected, getClimateFactors(asset.country, year, climateScenario))
+      }
+      energy = projected
     }
     const metrics = calculateYearMetrics(energy, asset.gia_m2, efProvider, region, year)
     const pathway = blendPathway(pathwayProvider, region, split, year)

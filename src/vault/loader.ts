@@ -143,6 +143,9 @@ function parseAsset(filename: string, data: Record<string, unknown>, body: strin
     renewable_degradation_pct_per_year:
       typeof data.renewable_degradation_pct_per_year === 'number'
         ? data.renewable_degradation_pct_per_year : undefined,
+    climate_scenario:
+      data.climate_scenario === 'rcp45' || data.climate_scenario === 'rcp85' || data.climate_scenario === 'none'
+        ? data.climate_scenario : undefined,
     body,
   }
 }
@@ -482,6 +485,9 @@ function assetToFrontmatter(a: Asset): Record<string, unknown> {
   }
   if (typeof a.renewable_degradation_pct_per_year === 'number') {
     fm.renewable_degradation_pct_per_year = a.renewable_degradation_pct_per_year
+  }
+  if (a.climate_scenario && a.climate_scenario !== 'none') {
+    fm.climate_scenario = a.climate_scenario
   }
   return fm
 }

@@ -1,6 +1,6 @@
 import type { Asset, Scenario } from './types'
 import { calculateYearMetrics, blendPathway, projectTrajectory, findMisalignmentYear, actualForYear } from './calculate'
-import { efProvider, pathwayProvider } from './providers'
+import { efProvider, pathwayProvider, getClimateFactors } from './providers'
 import { splitForAsset, regionForAsset } from '../vault/loader'
 
 export interface AssetSummary {
@@ -39,6 +39,9 @@ export function summariseAsset(asset: Asset, scenario?: Scenario): AssetSummary 
     endYear: 2050,
     getActual: (year) => actualForYear(asset.actuals, year),
     renewableDegradationPctPerYear: asset.renewable_degradation_pct_per_year,
+    getClimateFactors: asset.climate_scenario && asset.climate_scenario !== 'none'
+      ? (year) => getClimateFactors(asset.country, year, asset.climate_scenario!)
+      : undefined,
   })
   const misalignmentYear = findMisalignmentYear(trajectory).co2
 
