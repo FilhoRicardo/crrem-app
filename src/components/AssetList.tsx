@@ -1,32 +1,6 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
-import { calculateYearMetrics, blendPathway } from '../engine/calculate'
-import { efProvider, pathwayProvider } from '../engine/providers'
-import { splitForAsset, regionForAsset } from '../vault/loader'
-import type { Asset } from '../engine/types'
-
-const COUNTRY_FLAG: Record<string, string> = {
-  USA: '🇺🇸', 'United States': '🇺🇸',
-  'Hong Kong': '🇭🇰', HK: '🇭🇰',
-  'United Kingdom': '🇬🇧', UK: '🇬🇧', GB: '🇬🇧',
-  Australia: '🇦🇺', AU: '🇦🇺',
-}
-
-function flag(country: string): string {
-  return COUNTRY_FLAG[country] ?? '🏢'
-}
-
-function summariseAsset(asset: Asset, year: number) {
-  const region = regionForAsset(asset)
-  const split = splitForAsset(asset)
-  const m = calculateYearMetrics(asset.energy, asset.gia_m2, efProvider, region, year)
-  const pw = blendPathway(pathwayProvider, region, split, year)
-  return {
-    ci: m.carbon_intensity_kgco2e_m2,
-    pathway: pw.carbon_kgco2e_m2,
-    stranded: m.carbon_intensity_kgco2e_m2 > pw.carbon_kgco2e_m2,
-  }
-}
+import { summariseAsset, flagForCountry } from '../engine/summary'
 
 export default function AssetList() {
   const assets = useStore(s => s.assets)
@@ -34,7 +8,7 @@ export default function AssetList() {
   const selectAsset = useStore(s => s.selectAsset)
 
   const summaries = useMemo(
-    () => assets.map(a => ({ asset: a, ...summariseAsset(a, a.reporting_year) })),
+    () => assets.map(a => ({ asset: a, ...summariseAsset(a) })),
     [assets],
   )
 
@@ -49,7 +23,7 @@ export default function AssetList() {
         {summaries.length === 0 && (
           <p className="text-xs text-slate-400 px-3 py-6 text-center">
             No assets in this vault.<br />
-            Add a <code>.md</code> file to <code>assets/</code>.
+            Add one from the <strong>Properties</strong> tab.
           </p>
         )}
         {summaries.map(({ asset, ci, stranded }) => {
@@ -68,7 +42,7 @@ export default function AssetList() {
                 <span className={`font-medium text-sm leading-snug ${active ? 'text-white' : 'text-slate-800'}`}>
                   {asset.name}
                 </span>
-                <span className="text-xl ml-1 leading-none mt-0.5">{flag(asset.country)}</span>
+                <span className="text-xl ml-1 leading-none mt-0.5">{flagForCountry(asset.country)}</span>
               </div>
               <div className={`text-xs mt-0.5 ${active ? 'text-white/60' : 'text-slate-500'}`}>
                 {asset.property_type} · {asset.country}

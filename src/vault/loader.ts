@@ -595,6 +595,31 @@ async function fetchSampleEntities<T>(
   return { items, errors }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// File-based importers — parse a single .md File into a typed entity.
+// Used by import buttons on Asset / Scenario / Portfolio / ECM views.
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function importAssetFile(file: File): Promise<Asset> {
+  const { data, body } = parseFrontmatter(await file.text())
+  return parseAsset(file.name, data, body)
+}
+
+export async function importScenarioFile(file: File): Promise<Scenario> {
+  const { data, body } = parseFrontmatter(await file.text())
+  return parseScenario(file.name, data, body)
+}
+
+export async function importPortfolioFile(file: File): Promise<Portfolio> {
+  const { data, body } = parseFrontmatter(await file.text())
+  return parsePortfolio(file.name, data, body)
+}
+
+export async function importECMFile(file: File): Promise<ECM> {
+  const { data, body } = parseFrontmatter(await file.text())
+  return parseECM(file.name, data, body)
+}
+
 export async function loadSampleVault(basePath = '/sample-vault'): Promise<VaultContents> {
   const [a, s, e, p] = await Promise.all([
     fetchSampleEntities(basePath, 'assets', parseAsset),

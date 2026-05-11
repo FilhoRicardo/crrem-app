@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import type { Asset, EnergyMap, Carrier, YearActual } from '../engine/types'
-import { assetToMarkdown } from '../vault/loader'
+import { assetToMarkdown, importAssetFile } from '../vault/loader'
 import { downloadText } from '../utils/download'
+import { summariseAsset, flagForCountry } from '../engine/summary'
 import TemplateButton from './TemplateButton'
 import ActualsEditor from './ActualsEditor'
+import ImportButton from './ImportButton'
 
 const CARRIERS: Carrier[] = [
   'Elec_Grid', 'District_Heating', 'District_Cooling', 'Gas', 'Oil', 'Biomass',
@@ -23,16 +25,7 @@ const PROPERTY_TYPES = [
   'Industrial', 'Healthcare', 'Education', 'Other',
 ]
 
-const FLAGS: Record<string, string> = {
-  USA: '🇺🇸', 'United States': '🇺🇸',
-  'Hong Kong': '🇭🇰', HK: '🇭🇰',
-  'United Kingdom': '🇬🇧', UK: '🇬🇧',
-  Australia: '🇦🇺', AU: '🇦🇺',
-  Germany: '🇩🇪', France: '🇫🇷', Netherlands: '🇳🇱', Spain: '🇪🇸',
-  Italy: '🇮🇹', Canada: '🇨🇦', Japan: '🇯🇵', Singapore: '🇸🇬',
-}
-
-const flag = (c: string) => FLAGS[c] ?? '🏢'
+const flag = flagForCountry
 
 function slugify(s: string): string {
   return s.toLowerCase().trim()
@@ -249,6 +242,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function PropertiesView() {
   const assets = useStore(s => s.assets)
+  const scenarios = useStore(s => s.scenarios)
   const saveAsset = useStore(s => s.saveAsset)
   const deleteAsset = useStore(s => s.deleteAsset)
   const selectAsset = useStore(s => s.selectAsset)
@@ -258,8 +252,29 @@ export default function PropertiesView() {
 
   const [editing, setEditing] = useState<Asset | null>(null)
   const [creating, setCreating] = useState(false)
+  const [search, setSearch] = useState('')
 
   const existingIds = assets.map(a => a.id)
+
+  const rows = useMemo(() => {
+    return assets.map(a => {
+      const assetScenarios = scenarios.filter(s => s.asset_id === a.id)
+      // Use the first scenario for the misalignment projection (informational only).
+      const summary = summariseAsset(a, assetScenarios[0])
+      return { asset: a, summary, scenarioCount: assetScenarios.length }
+    })
+  }, [assets, scenarios])
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return rows
+    const q = search.trim().toLowerCase()
+    return rows.filter(r =>
+      r.asset.name.toLowerCase().includes(q) ||
+      r.asset.country.toLowerCase().includes(q) ||
+      r.asset.property_type.toLowerCase().includes(q) ||
+      r.asset.id.toLowerCase().includes(q),
+    )
+  }, [rows, search])
 
   const handleSave = async (a: Asset) => {
     await saveAsset(a)
@@ -312,8 +327,19 @@ export default function PropertiesView() {
             {readOnly && <span className="ml-2 text-amber-600">· read-only (sample vault)</span>}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg w-48 focus:outline-none focus:border-crrem-navy"
+          />
           <TemplateButton kind="asset" />
+          <ImportButton
+            label="Import .md"
+            disabled={readOnly}
+            onImport={async file => { await saveAsset(await importAssetFile(file)) }}
+          />
           <button
             onClick={() => setCreating(true)}
             disabled={readOnly}
@@ -325,10 +351,14 @@ export default function PropertiesView() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
         {assets.length === 0 ? (
           <p className="p-8 text-center text-slate-400 italic">
             No properties yet. Click <strong>+ New property</strong> to add one.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="p-8 text-center text-slate-400 italic">
+            No properties match "<strong>{search}</strong>".
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -338,13 +368,15 @@ export default function PropertiesView() {
                 <th className="px-4 py-3 text-left">Country</th>
                 <th className="px-4 py-3 text-left">Type</th>
                 <th className="px-4 py-3 text-right">GIA m²</th>
-                <th className="px-4 py-3 text-right">Reporting yr</th>
+                <th className="px-4 py-3 text-right">CI 2024</th>
+                <th className="px-4 py-3 text-right">Misalign.</th>
+                <th className="px-4 py-3 text-right">Scenarios</th>
                 <th className="px-4 py-3 text-left">Carriers</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {assets.map(a => (
+              {filtered.map(({ asset: a, summary, scenarioCount }) => (
                 <tr key={a.id} className="border-t border-slate-100 hover:bg-slate-50/50">
                   <td className="px-4 py-3">
                     <button
@@ -355,10 +387,23 @@ export default function PropertiesView() {
                     </button>
                     <div className="text-xs text-slate-400 font-mono">{a.id}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{flag(a.country)} {a.country}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{flag(a.country)} {a.country}</td>
                   <td className="px-4 py-3 text-slate-600">{a.property_type}</td>
                   <td className="px-4 py-3 text-right text-slate-700">{a.gia_m2.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-slate-500">{a.reporting_year}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={`font-semibold ${summary.stranded ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {summary.ci.toFixed(1)}
+                    </span>
+                    <div className="text-xs text-slate-400">vs {summary.pathway.toFixed(1)}</div>
+                  </td>
+                  <td className={`px-4 py-3 text-right font-medium ${
+                    summary.misalignmentYear == null ? 'text-emerald-600'
+                      : summary.misalignmentYear <= a.reporting_year ? 'text-red-600'
+                      : 'text-amber-600'
+                  }`}>
+                    {summary.misalignmentYear ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-slate-500">{scenarioCount}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {Object.keys(a.energy).map(c => (

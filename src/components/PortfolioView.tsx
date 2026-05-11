@@ -3,10 +3,11 @@ import Plotly from 'plotly.js-dist-min'
 import { useStore } from '../store'
 import { calculateYearMetrics, blendPathway, applyRetrofitsForYear, findMisalignmentYear, actualForYear } from '../engine/calculate'
 import { efProvider, pathwayProvider } from '../engine/providers'
-import { splitForAsset, regionForAsset, portfolioToMarkdown } from '../vault/loader'
+import { splitForAsset, regionForAsset, portfolioToMarkdown, importPortfolioFile } from '../vault/loader'
 import type { Asset, Scenario, TrajectoryPoint, Portfolio } from '../engine/types'
 import { downloadText } from '../utils/download'
 import TemplateButton from './TemplateButton'
+import ImportButton from './ImportButton'
 import PortfolioForm, { emptyPortfolio } from './PortfolioForm'
 
 interface AssetRollup {
@@ -221,6 +222,15 @@ export default function PortfolioView() {
           </div>
           <div className="flex gap-2">
             <TemplateButton kind="portfolio" />
+            <ImportButton
+              label="Import .md"
+              disabled={readOnly}
+              onImport={async file => {
+                const p = await importPortfolioFile(file)
+                await savePortfolio(p)
+                selectPortfolio(p.id)
+              }}
+            />
             <button
               onClick={() => setCreating(true)}
               disabled={readOnly}
@@ -280,6 +290,15 @@ export default function PortfolioView() {
           >
             Delete
           </button>
+          <ImportButton
+            label="Import"
+            disabled={readOnly}
+            onImport={async file => {
+              const p = await importPortfolioFile(file)
+              await savePortfolio(p)
+              selectPortfolio(p.id)
+            }}
+          />
           <button
             onClick={() => setCreating(true)}
             disabled={readOnly}

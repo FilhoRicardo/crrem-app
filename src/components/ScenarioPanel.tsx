@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import type { Scenario } from '../engine/types'
-import { scenarioToMarkdown } from '../vault/loader'
+import { scenarioToMarkdown, importScenarioFile } from '../vault/loader'
 import { downloadText } from '../utils/download'
 import TemplateButton from './TemplateButton'
+import ImportButton from './ImportButton'
 
 interface Props {
   assetId: string
@@ -69,6 +70,20 @@ export default function ScenarioPanel({ assetId, scenarios, activeIds, onToggle,
         <span className="text-sm font-semibold text-slate-700">Scenarios</span>
         <div className="flex gap-2">
           <TemplateButton kind="scenario" variant="ghost" />
+          <ImportButton
+            label="Import"
+            disabled={readOnly}
+            variant="ghost"
+            onImport={async file => {
+              const s = await importScenarioFile(file)
+              if (s.asset_id !== assetId) {
+                if (!confirm(`This scenario references asset "${s.asset_id}" but you're viewing "${assetId}". Re-link it to this asset?`)) return
+                s.asset_id = assetId
+              }
+              await saveScenario(s)
+              onToggle(s.id)
+            }}
+          />
           {!readOnly && (
             <button
               onClick={() => setShowNew(s => !s)}
@@ -104,9 +119,16 @@ export default function ScenarioPanel({ assetId, scenarios, activeIds, onToggle,
               <span className={`text-sm font-medium ${active ? '' : 'text-slate-700'}`} style={active ? { color: colour } : undefined}>
                 {s.name}
               </span>
-              {s.retrofits.length > 0 && (
-                <span className="text-xs text-slate-400">{s.retrofits.length} retrofit{s.retrofits.length === 1 ? '' : 's'}</span>
-              )}
+              {s.retrofits.length > 0 && (() => {
+                const capex = s.retrofits.reduce((sum, r) => sum + (r.cost?.capex_total ?? 0), 0)
+                const currency = s.retrofits.find(r => r.cost?.currency)?.cost?.currency ?? ''
+                return (
+                  <span className="text-xs text-slate-400">
+                    {s.retrofits.length} retrofit{s.retrofits.length === 1 ? '' : 's'}
+                    {capex > 0 && ` · ${currency} ${capex.toLocaleString()}`}
+                  </span>
+                )
+              })()}
               <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke={colour} strokeWidth={2}/></svg>
               <button
                 onClick={(e) => {

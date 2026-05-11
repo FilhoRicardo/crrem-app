@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '../store'
-import { parseFrontmatter, ecmToMarkdown } from '../vault/loader'
+import { ecmToMarkdown, importECMFile } from '../vault/loader'
 import { downloadText } from '../utils/download'
 import { TEMPLATES } from '../utils/templates'
+import ImportButton from './ImportButton'
 import type { ECM, ECMImpact, Carrier } from '../engine/types'
 
 const CARRIERS: Carrier[] = [
@@ -40,31 +41,52 @@ export default function ECMLibrary() {
   const setOpen = useStore(s => s.setECMPanelOpen)
   const ecms = useStore(s => s.ecms)
   const saveECM = useStore(s => s.saveECM)
+  const deleteECM = useStore(s => s.deleteECM)
   const vaultMode = useStore(s => s.vaultMode)
   const readOnly = vaultMode !== 'fsa'
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<string>('')
   const [applyFor, setApplyFor] = useState<string | null>(null) // ECM id pending apply
   const [yearInput, setYearInput] = useState('2030')
-  const [creatingECM, setCreatingECM] = useState(false)
+  // formMode: null = closed; 'create' = blank form; ECM id = editing existing
+  const [formMode, setFormMode] = useState<null | 'create' | string>(null)
   const [draftECM, setDraftECM] = useState<ECM>({
     id: '', name: '', category: 'Lighting', license: 'CC-BY-4.0', version: '1.0',
     impacts: [emptyECMImpact()],
   })
 
-  const handleCreateECM = async () => {
-    if (!draftECM.name.trim()) return
-    let id = draftECM.id || slugify(draftECM.name)
-    let n = 2; const base = id
-    while (ecms.some(x => x.id === id)) id = `${base}-${n++}`
-    await saveECM({ ...draftECM, id })
-    setCreatingECM(false)
+  const isEditing = formMode !== null && formMode !== 'create'
+
+  const openCreate = () => {
     setDraftECM({
       id: '', name: '', category: 'Lighting', license: 'CC-BY-4.0', version: '1.0',
       impacts: [emptyECMImpact()],
     })
+    setFormMode('create')
+  }
+
+  const openEdit = (ecm: ECM) => {
+    setDraftECM({ ...ecm, impacts: ecm.impacts.length > 0 ? ecm.impacts : [emptyECMImpact()] })
+    setFormMode(ecm.id)
+  }
+
+  const closeForm = () => setFormMode(null)
+
+  const handleSaveECM = async () => {
+    if (!draftECM.name.trim()) return
+    let id = draftECM.id || slugify(draftECM.name)
+    if (!isEditing) {
+      let n = 2; const base = id
+      while (ecms.some(x => x.id === id)) id = `${base}-${n++}`
+    }
+    await saveECM({ ...draftECM, id })
+    closeForm()
+  }
+
+  const handleDeleteECM = async (ecm: ECM) => {
+    if (!confirm(`Delete ECM "${ecm.name}"? It will be moved to trash/ecms/.`)) return
+    await deleteECM(ecm.id)
   }
 
   useEffect(() => {
@@ -97,27 +119,6 @@ export default function ECMLibrary() {
     window.dispatchEvent(new CustomEvent('crrem:apply-ecm', { detail: { ecmId, year } }))
     setApplyFor(null)
     setOpen(false)
-  }
-
-  const handleImport = async (file: File) => {
-    try {
-      const content = await file.text()
-      const { data, body } = parseFrontmatter(content)
-      const ecm: ECM = {
-        id: String(data.id ?? file.name.replace(/\.md$/, '')),
-        name: String(data.name ?? 'Imported ECM'),
-        category: String(data.category ?? 'Other'),
-        version: typeof data.version === 'string' ? data.version : '1.0',
-        license: typeof data.license === 'string' ? data.license : 'CC-BY-4.0',
-        summary: typeof data.summary === 'string' ? data.summary : undefined,
-        impacts: Array.isArray(data.impacts) ? data.impacts as ECM['impacts'] : [],
-        cost: data.cost as ECM['cost'],
-        body,
-      }
-      await saveECM(ecm)
-    } catch (e) {
-      alert(`Failed to import: ${e instanceof Error ? e.message : String(e)}`)
-    }
   }
 
   const handleExport = (ecm: ECM) => {
@@ -159,11 +160,13 @@ export default function ECMLibrary() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-          {creatingECM && (
+          {formMode !== null && (
             <div className="border-2 border-crrem-navy/30 rounded-xl p-4 bg-white">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-slate-800">New ECM</h4>
-                <button onClick={() => setCreatingECM(false)} className="text-slate-400 text-xl leading-none">×</button>
+                <h4 className="text-sm font-semibold text-slate-800">
+                  {isEditing ? `Edit · ${draftECM.name || draftECM.id}` : 'New ECM'}
+                </h4>
+                <button onClick={closeForm} className="text-slate-400 text-xl leading-none">×</button>
               </div>
               <div className="space-y-2">
                 <input
@@ -262,18 +265,18 @@ export default function ECMLibrary() {
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setCreatingECM(false)} className="text-xs px-3 py-1.5 text-slate-500">Cancel</button>
+                  <button onClick={closeForm} className="text-xs px-3 py-1.5 text-slate-500">Cancel</button>
                   <button
-                    onClick={handleCreateECM}
+                    onClick={handleSaveECM}
                     disabled={!draftECM.name.trim() || readOnly}
                     className="text-xs px-3 py-1.5 rounded-lg bg-crrem-navy text-white font-medium disabled:opacity-40"
-                  >Create</button>
+                  >{isEditing ? 'Save changes' : 'Create'}</button>
                 </div>
               </div>
             </div>
           )}
 
-          {filtered.length === 0 && !creatingECM && (
+          {filtered.length === 0 && formMode === null && (
             <p className="text-sm text-slate-400 text-center py-8 italic">No ECMs match.</p>
           )}
           {filtered.map(ecm => {
@@ -292,9 +295,25 @@ export default function ECMLibrary() {
                       )}
                     </div>
                   </div>
-                  <button onClick={() => handleExport(ecm)} className="text-slate-300 hover:text-slate-600 text-sm" title="Export this ECM">
-                    ⬇
-                  </button>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button onClick={() => handleExport(ecm)} className="text-slate-300 hover:text-slate-600 text-sm" title="Download as .md">
+                      ⬇
+                    </button>
+                    <button
+                      onClick={() => openEdit(ecm)}
+                      disabled={readOnly}
+                      className="text-xs px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteECM(ecm)}
+                      disabled={readOnly}
+                      className="text-xs px-2 py-0.5 rounded border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Del
+                    </button>
+                  </div>
                 </div>
                 {ecm.summary && (
                   <p className="text-xs text-slate-500 mb-2">{ecm.summary}</p>
@@ -338,41 +357,31 @@ export default function ECMLibrary() {
           })}
         </div>
 
-        <div className="flex-shrink-0 border-t border-slate-100 px-4 py-3 flex gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md"
-            className="hidden"
-            onChange={e => {
-              const file = e.target.files?.[0]
-              if (file) handleImport(file)
-              e.target.value = ''
-            }}
-          />
+        <div className="flex-shrink-0 border-t border-slate-100 px-4 py-3 grid grid-cols-3 gap-2">
           <button
-            onClick={() => setCreatingECM(true)}
-            disabled={readOnly || creatingECM}
-            className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl bg-crrem-navy text-white font-medium hover:bg-crrem-navy/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={openCreate}
+            disabled={readOnly || formMode !== null}
+            className="flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl bg-crrem-navy text-white font-medium hover:bg-crrem-navy/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={readOnly ? 'Open a real vault to create' : 'Create a new ECM'}
           >
-            + Create ECM
+            + Create
           </button>
           <button
             onClick={() => downloadText(TEMPLATES.ecm.filename, TEMPLATES.ecm.content)}
-            className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+            className="flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
             title="Download a blank ECM .md template"
           >
             ⬇ Template
           </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
+          <ImportButton
+            label="Import"
             disabled={readOnly}
-            className="flex-1 flex items-center justify-center gap-2 text-xs py-2.5 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-600 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-            title={readOnly ? 'Open a real vault to import' : 'Import an .md ECM file'}
-          >
-            ⬆ Import
-          </button>
+            className="!justify-center !py-2.5 !rounded-xl border-dashed"
+            onImport={async file => {
+              const ecm = await importECMFile(file)
+              await saveECM(ecm)
+            }}
+          />
         </div>
       </div>
     </div>
