@@ -140,6 +140,9 @@ function parseAsset(filename: string, data: Record<string, unknown>, body: strin
     utility_prices: isObj(data.utility_prices) ? (data.utility_prices as Asset['utility_prices']) : undefined,
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : undefined,
     actuals,
+    renewable_degradation_pct_per_year:
+      typeof data.renewable_degradation_pct_per_year === 'number'
+        ? data.renewable_degradation_pct_per_year : undefined,
     body,
   }
 }
@@ -476,6 +479,9 @@ function assetToFrontmatter(a: Asset): Record<string, unknown> {
       if (act.notes) o.notes = act.notes
       return o
     })
+  }
+  if (typeof a.renewable_degradation_pct_per_year === 'number') {
+    fm.renewable_degradation_pct_per_year = a.renewable_degradation_pct_per_year
   }
   return fm
 }

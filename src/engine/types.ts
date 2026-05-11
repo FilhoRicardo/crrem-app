@@ -95,6 +95,12 @@ export interface ProjectTrajectoryInput {
    * for that year (per CRREM methodology — actuals override projection).
    */
   getActual?: (year: number) => EnergyMap | null
+  /**
+   * Optional renewable degradation, %/yr. Applied compoundingly to
+   * Renew_Consumed + Renew_Exported in projected years only (actuals stay
+   * untouched). Defaults to 0 (off) — opt in per asset.
+   */
+  renewableDegradationPctPerYear?: number
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -110,6 +116,13 @@ export interface UtilityPrices {
   Biomass?: number
   Other_Fuels?: number
   currency?: string
+  /**
+   * Annual energy-price escalation, percent. Applied compoundingly to all
+   * carriers when computing future-year savings (utility_prices reflect today's
+   * cost; a retrofit installed in year Y uses today × (1+esc/100)^(Y - reporting_year)).
+   * Defaults to 0 (no escalation). Typical real-world range 1–4%/yr.
+   */
+  escalation_pct_per_year?: number
 }
 
 /**
@@ -147,6 +160,13 @@ export interface Asset {
   tags?: string[]
   /** Measured per-year consumption. Overrides projection where present. */
   actuals?: YearActual[]
+  /**
+   * Annual degradation factor applied compoundingly to Renew_Consumed +
+   * Renew_Exported each year past the reporting year. Realistic PV systems
+   * lose about 0.5%/yr. Defaults to 0 (no degradation) so existing trajectories
+   * stay reproducible. Set per-asset, e.g. `renewable_degradation_pct_per_year: 0.5`.
+   */
+  renewable_degradation_pct_per_year?: number
   body?: string
 }
 

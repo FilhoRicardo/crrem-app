@@ -44,6 +44,7 @@ export function buildScenarioTrajectories(
       startYear,
       endYear,
       getActual,
+      renewableDegradationPctPerYear: asset.renewable_degradation_pct_per_year,
     })
     const misalignmentYear = findMisalignmentYear(trajectory).co2
     return { scenario, trajectory, misalignmentYear }

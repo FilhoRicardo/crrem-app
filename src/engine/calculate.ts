@@ -125,12 +125,23 @@ export function blendPathway(
  * always supersede projection where measured data exists).
  */
 export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoint[] {
-  const { baseEnergy, gia, getEF, getPathway, region, split, retrofits, startYear, endYear, getActual } = input
+  const {
+    baseEnergy, gia, getEF, getPathway, region, split, retrofits,
+    startYear, endYear, getActual, renewableDegradationPctPerYear,
+  } = input
   const points: TrajectoryPoint[] = []
 
   for (let year = startYear; year <= endYear; year++) {
     const actual = getActual?.(year) ?? null
-    const energy = actual ?? applyRetrofitsForYear(baseEnergy, retrofits, year)
+    let energy: EnergyMap
+    if (actual !== null) {
+      energy = actual  // Measured — never degraded.
+    } else {
+      const projected = applyRetrofitsForYear(baseEnergy, retrofits, year)
+      energy = renewableDegradationPctPerYear
+        ? applyRenewableDegradation(projected, year - startYear, renewableDegradationPctPerYear)
+        : projected
+    }
     const metrics = calculateYearMetrics(energy, gia, getEF, region, year)
     const pathway = blendPathway(getPathway, region, split, year)
 
@@ -144,6 +155,26 @@ export function projectTrajectory(input: ProjectTrajectoryInput): TrajectoryPoin
     })
   }
   return points
+}
+
+/**
+ * Apply compound year-on-year degradation to on-site renewables in an EnergyMap.
+ * Realistic PV systems lose ~0.5%/yr; large-scale arrays sometimes 0.3-0.7%.
+ *
+ * `yearsAhead` is years past the reporting baseline. Returns a new EnergyMap
+ * (does not mutate). Returns input unchanged when degradation is 0 or negative.
+ */
+export function applyRenewableDegradation(
+  energy: EnergyMap,
+  yearsAhead: number,
+  degradationPctPerYear: number,
+): EnergyMap {
+  if (yearsAhead <= 0 || !degradationPctPerYear || degradationPctPerYear <= 0) return energy
+  const factor = Math.pow(1 - degradationPctPerYear / 100, yearsAhead)
+  const out: EnergyMap = { ...energy }
+  if (out.Renew_Consumed) out.Renew_Consumed = out.Renew_Consumed * factor
+  if (out.Renew_Exported) out.Renew_Exported = out.Renew_Exported * factor
+  return out
 }
 
 /** Sum monthly readings (12 values jan-dec, possibly with nulls) to an annual EnergyMap. */

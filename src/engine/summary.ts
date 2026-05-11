@@ -38,6 +38,7 @@ export function summariseAsset(asset: Asset, scenario?: Scenario): AssetSummary 
     startYear: 2024,
     endYear: 2050,
     getActual: (year) => actualForYear(asset.actuals, year),
+    renewableDegradationPctPerYear: asset.renewable_degradation_pct_per_year,
   })
   const misalignmentYear = findMisalignmentYear(trajectory).co2
 

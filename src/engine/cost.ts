@@ -2,6 +2,18 @@ import type { Asset, Carrier, Retrofit, EnergyMap } from './types'
 import { applyRetrofitsForYear } from './calculate'
 
 /**
+ * Apply a compound annual escalator to a price. Returns the price `yearsAhead`
+ * years after the baseline. Defaults to 0% (no escalation).
+ *
+ * Pulled out so the same escalation rule applies everywhere (cost analysis,
+ * NPV calcs we might add later, scenario comparisons).
+ */
+export function escalatePrice(price: number, yearsAhead: number, escalationPctPerYear: number | undefined): number {
+  if (!escalationPctPerYear || escalationPctPerYear === 0 || yearsAhead === 0) return price
+  return price * Math.pow(1 + escalationPctPerYear / 100, yearsAhead)
+}
+
+/**
  * Compute the per-year energy *delta* a retrofit causes vs the prior state.
  *
  * For ROI / payback, we compare:
@@ -31,7 +43,7 @@ function carriersInDelta(delta: Partial<Record<Carrier, number>>): Carrier[] {
 }
 
 export function analyseRetrofitCost(
-  asset: Pick<Asset, 'energy' | 'utility_prices'>,
+  asset: Pick<Asset, 'energy' | 'utility_prices' | 'reporting_year'>,
   retrofit: Retrofit,
   prior: Retrofit[],
 ): RetrofitCostAnalysis {
@@ -54,18 +66,22 @@ export function analyseRetrofitCost(
 
   const prices = asset.utility_prices
   const currency = prices?.currency ?? null
+  // Escalate today's prices to the retrofit's first active year. A 2030 retrofit
+  // bought into a 2024-priced fuel landscape needs to use 2030 prices to be honest.
+  const escPct = prices?.escalation_pct_per_year
+  const yearsAhead = Math.max(0, year - (asset.reporting_year ?? year))
 
   let annualSavings: number | null = 0
   const missingPrices: Carrier[] = []
   for (const c of carriersInDelta(energyDelta)) {
-    const price = prices?.[c as keyof typeof prices] as number | undefined
-    if (typeof price !== 'number') {
-      // We have a delta but no price — can't compute opex contribution.
+    const todayPrice = prices?.[c as keyof typeof prices] as number | undefined
+    if (typeof todayPrice !== 'number') {
       missingPrices.push(c)
       annualSavings = null
       continue
     }
-    if (annualSavings !== null) annualSavings += (energyDelta[c] ?? 0) * price
+    const futurePrice = escalatePrice(todayPrice, yearsAhead, escPct)
+    if (annualSavings !== null) annualSavings += (energyDelta[c] ?? 0) * futurePrice
   }
 
   const capex = retrofit.cost?.capex_total ?? 0
@@ -95,7 +111,7 @@ export interface ScenarioCostSummary {
 }
 
 export function analyseScenarioCost(
-  asset: Pick<Asset, 'energy' | 'utility_prices'>,
+  asset: Pick<Asset, 'energy' | 'utility_prices' | 'reporting_year'>,
   retrofits: Retrofit[],
 ): ScenarioCostSummary {
   // Apply in chronological order so each retrofit's "prior" set is correct.

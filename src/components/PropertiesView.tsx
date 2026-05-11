@@ -34,6 +34,11 @@ function slugify(s: string): string {
     .slice(0, 60) || 'asset'
 }
 
+function hasAnyPrice(up: Record<string, unknown>): boolean {
+  return Object.entries(up).some(([k, v]) => k !== 'currency' && v !== undefined && v !== null)
+    || (typeof up.currency === 'string' && up.currency.length > 0)
+}
+
 function emptyAsset(reportingYear: number): Asset {
   return {
     id: '',
@@ -65,6 +70,25 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
     else delete energy[carrier]
     setDraft({ ...draft, energy })
   }
+
+  const setUtilityPrice = (carrier: Carrier, value: number) => {
+    const up = { ...(draft.utility_prices ?? {}) }
+    if (value > 0) (up as Record<string, unknown>)[carrier] = value
+    else delete (up as Record<string, unknown>)[carrier]
+    setDraft({ ...draft, utility_prices: hasAnyPrice(up) ? up : undefined })
+  }
+  const setUtilityCurrency = (currency: string) => {
+    const up = { ...(draft.utility_prices ?? {}), currency: currency || undefined }
+    setDraft({ ...draft, utility_prices: hasAnyPrice(up) ? up : undefined })
+  }
+  const setUtilityEscalation = (pct: number) => {
+    const up = { ...(draft.utility_prices ?? {}) }
+    if (Number.isFinite(pct) && pct !== 0) up.escalation_pct_per_year = pct
+    else delete up.escalation_pct_per_year
+    setDraft({ ...draft, utility_prices: hasAnyPrice(up) ? up : undefined })
+  }
+  const carriersWithDemand = (Object.keys(draft.energy) as Carrier[])
+    .filter(c => (draft.energy[c] ?? 0) > 0 && c !== 'Renew_Exported')
 
   const handleSave = () => {
     if (!draft.name.trim()) return setError('Name is required')
@@ -200,6 +224,57 @@ function AssetForm({ initial, isNew, onCancel, onSave, existingIds, readOnly }: 
               />
             </Field>
           ))}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <h4 className="text-sm font-semibold text-slate-700 mb-2">Utility prices (optional)</h4>
+        <p className="text-xs text-slate-400 mb-3">
+          Per-carrier energy prices in the asset's currency. Used to compute opex savings + payback for each retrofit.
+          Leave empty if you don't want a cost analysis. Future-year prices escalate at the rate below.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Currency">
+            <input
+              value={draft.utility_prices?.currency ?? ''}
+              onChange={e => setUtilityCurrency(e.target.value.toUpperCase())}
+              placeholder="USD"
+              maxLength={6}
+              disabled={readOnly}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50 uppercase"
+            />
+          </Field>
+          <Field label="Escalation %/yr">
+            <input
+              type="number"
+              step={0.1}
+              value={draft.utility_prices?.escalation_pct_per_year ?? ''}
+              onChange={e => setUtilityEscalation(Number(e.target.value))}
+              placeholder="0"
+              disabled={readOnly}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
+            />
+          </Field>
+          <div />
+          {carriersWithDemand.length === 0 ? (
+            <p className="col-span-3 text-xs text-slate-400 italic">
+              Add baseline energy demand above first — prices show only for carriers with non-zero kWh.
+            </p>
+          ) : (
+            carriersWithDemand.map(c => (
+              <Field key={c} label={`${c} (per kWh)`}>
+                <input
+                  type="number"
+                  step={0.001}
+                  value={(draft.utility_prices?.[c as keyof typeof draft.utility_prices] as number | undefined) ?? ''}
+                  onChange={e => setUtilityPrice(c, Number(e.target.value))}
+                  placeholder="0.00"
+                  disabled={readOnly}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy disabled:bg-slate-50"
+                />
+              </Field>
+            ))
+          )}
         </div>
       </div>
 
