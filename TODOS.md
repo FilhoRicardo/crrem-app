@@ -26,14 +26,24 @@ human memory.
 - [x] Test coverage — 109 vitest passing across engine / cost / climate / store / loader
 - [x] TODOS.md + ASCII data-flow diagram in MEMORY.md
 
-## Next round
+## Next round (post-CEO-review-batch-2)
 
-- [ ] **Retrofit lifetime + replacement modelling** — heat pumps replaced at ~15yr, LEDs ~10yr, etc. Without it, a 2026 heat pump pretends to keep working past 2050 with zero re-capex.
-- [ ] **NUTS-3 ZIP-level HDD/CDD** — bundled xlsx has 363k ZIP-level rows; we use the 30 country aggregates only. Coastal vs alpine France diverge a lot.
-- [ ] **Sensitivity analysis** — slider for utility-price ±20%, capex ±20%, discount rate ±2pp; recompute NPV/IRR live.
-- [ ] **MACC chart** — Marginal Abatement Cost Curve (£/tCO₂ avoided per retrofit, sorted)
-- [ ] **Async lazy-load `crrem-data.js`** — first-paint optimization (currently 2.8 MB inlined into bundle)
-- [ ] **Retrofit cost auto-fill from ECM** — applying an ECM should propagate `embodied_carbon_kg_per_m2 × asset.gia_m2` and `capex_per_m2_typical × gia_m2` into the new retrofit.
+(empty — see git log for what just shipped: NUTS-3 climate, asset comparison,
+multi-asset retrofit campaign, undo stack)
+
+## Deferred with explicit rationale
+
+- [ ] **Async lazy-load `crrem-data.js`** — Per `/autoplan` principle #5
+      (explicit over clever): making providers async ripples through 6+
+      components and breaks the "providers are pure sync functions" mental
+      model. M+ refactor risk for a first-paint UX win that hasn't been
+      reported as a problem. NUTS-3 lazy-load (which IS shipped) proves
+      the pattern works for genuinely large data.
+- [ ] **Playwright E2E tests** — Component tests via @testing-library/react
+      would be cheaper than Playwright (250 MB browser install + server
+      orchestration). Current 137-test pyramid covers engine/cost/climate/
+      store/loader at high confidence; UI is type-checked + manually QA'd.
+      Add Playwright only if a UI regression actually slips into prod.
 
 ## Known yellow flags
 

@@ -278,6 +278,12 @@ interface ClimateRow {
 }
 
 const climate: Record<string, ClimateRow> = {}
+
+// NUTS-3 climate (~1500 entries) + ZIP→NUTS3 lookup (~363k entries).
+// Stored in a separate output file so the main crrem-data.json stays small.
+const climateNuts3: Record<string, ClimateRow> = {}
+const zipToNuts3: Record<string, Record<string, string>> = {}
+
 try {
   const wbClim = loadWorkbook('hdd-cdd-eu-v2.05.xlsx')
   const sheet = wbClim.Sheets['HDD CDD Zip Code Matching 2024']
@@ -286,26 +292,47 @@ try {
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r]
       if (!row) continue
-      if (row[0] !== null) continue  // country aggregate rows have null ZIP Code
+      const isCountryAggregate = row[0] === null
       const country = asString(row[1])
-      if (!country || climate[country]) continue
-      // _pa rates are what drive the adjustment (factor doesn't use the baseline)
-      // — accept the country even if baseline values are null (UK, Switzerland)
+      const nuts3Code = asString(row[5])
       const cdd45Pa = asNumber(row[8])
       const hdd45Pa = asNumber(row[11])
       if (cdd45Pa === null && hdd45Pa === null) continue
-      climate[country] = {
+
+      const climateRow: ClimateRow = {
         baselineYear: 2024,
         cddBase: asNumber(row[7]) ?? 0,
-        cdd45Pa: cdd45Pa ?? 0, cdd85Pa: asNumber(row[9]) ?? 0,
+        cdd45Pa: cdd45Pa ?? 0,
+        cdd85Pa: asNumber(row[9]) ?? 0,
         hddBase: asNumber(row[10]) ?? 0,
-        hdd45Pa: hdd45Pa ?? 0, hdd85Pa: asNumber(row[12]) ?? 0,
+        hdd45Pa: hdd45Pa ?? 0,
+        hdd85Pa: asNumber(row[12]) ?? 0,
+      }
+
+      if (isCountryAggregate && country && !climate[country]) {
+        // Country-level row — what we already supported
+        climate[country] = climateRow
+      } else if (!isCountryAggregate) {
+        // ZIP-level row — capture NUTS-3 climate (first time we see each
+        // NUTS-3 code; values are repeated across all ZIPs in the same NUTS-3)
+        // and add the ZIP → NUTS-3 mapping.
+        if (nuts3Code) {
+          if (!climateNuts3[nuts3Code]) climateNuts3[nuts3Code] = climateRow
+          const zip = asString(row[0])
+          if (zip && country) {
+            if (!zipToNuts3[country]) zipToNuts3[country] = {}
+            zipToNuts3[country][zip] = nuts3Code
+          }
+        }
       }
     }
   }
 } catch (e) {
   console.warn('Climate parse skipped:', e instanceof Error ? e.message : e)
 }
+
+console.log(`  climate NUTS-3 regions: ${Object.keys(climateNuts3).length}`)
+console.log(`  ZIP → NUTS-3 entries: ${Object.values(zipToNuts3).reduce((s, m) => s + Object.keys(m).length, 0)}`)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Write
@@ -334,6 +361,25 @@ const output = {
 
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, JSON.stringify(output))
+
+// Write NUTS-3 climate + ZIP→NUTS-3 lookup as a SEPARATE static asset that
+// gets fetched on demand from /eu-climate-nuts3.json. Keeps the main bundle
+// small (this file is ~6 MB raw, ~600 kB gzip).
+const NUTS3_OUT = join(ROOT, 'public', 'eu-climate-nuts3.json')
+mkdirSync(dirname(NUTS3_OUT), { recursive: true })
+writeFileSync(NUTS3_OUT, JSON.stringify({
+  meta: {
+    generated: new Date().toISOString(),
+    source: 'CRREM v2.05 hdd-cdd-eu (NUTS-3 + ZIP lookup)',
+    counts: {
+      nuts3Regions: Object.keys(climateNuts3).length,
+      zipEntries: Object.values(zipToNuts3).reduce((s, m) => s + Object.keys(m).length, 0),
+    },
+  },
+  climateNuts3,
+  zipToNuts3,
+}))
+console.log(`Wrote ${NUTS3_OUT} (${(Object.keys(climateNuts3).length)} NUTS-3 regions)`)
 
 console.log(`\nWrote ${OUT}`)
 console.log(`  ${output.meta.counts.pathwayRegions} pathway regions, ${output.meta.counts.pathwayCombos} region×property combos`)

@@ -38,6 +38,7 @@ beforeEach(() => {
     view: 'asset',
     selectedAssetId: null, activeScenarioIds: [], selectedPortfolioId: null,
     ecmPanelOpen: false,
+    undoStack: [],
   })
 })
 
@@ -274,6 +275,89 @@ describe('view + panel', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // closeVault — full cleanup
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Undo stack
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('undo', () => {
+  test('saveAsset captures pre-state; undo restores it', async () => {
+    useStore.setState({ assets: [makeAsset('original')] })
+    expect(useStore.getState().undoStack).toHaveLength(0)
+
+    await useStore.getState().saveAsset(makeAsset('new'))
+    expect(useStore.getState().assets).toHaveLength(2)
+    expect(useStore.getState().undoStack).toHaveLength(1)
+    expect(useStore.getState().undoStack[0].label).toMatch(/Save asset.*new/)
+
+    await useStore.getState().undo()
+    expect(useStore.getState().assets).toHaveLength(1)
+    expect(useStore.getState().assets[0].id).toBe('original')
+    expect(useStore.getState().undoStack).toHaveLength(0)
+  })
+
+  test('multiple mutations stack; undo pops one at a time (LIFO)', async () => {
+    await useStore.getState().saveAsset(makeAsset('a'))
+    await useStore.getState().saveAsset(makeAsset('b'))
+    await useStore.getState().saveAsset(makeAsset('c'))
+    expect(useStore.getState().assets).toHaveLength(3)
+    expect(useStore.getState().undoStack).toHaveLength(3)
+
+    await useStore.getState().undo()
+    expect(useStore.getState().assets.map(a => a.id)).toEqual(['a', 'b'])
+    await useStore.getState().undo()
+    expect(useStore.getState().assets.map(a => a.id)).toEqual(['a'])
+    await useStore.getState().undo()
+    expect(useStore.getState().assets).toEqual([])
+  })
+
+  test('undo on empty stack is a no-op', async () => {
+    expect(useStore.getState().undoStack).toHaveLength(0)
+    await useStore.getState().undo()  // should not throw
+    expect(useStore.getState().assets).toEqual([])
+  })
+
+  test('stack caps at UNDO_DEPTH (20) — older snapshots fall off', async () => {
+    for (let i = 0; i < 25; i++) {
+      await useStore.getState().saveAsset(makeAsset(`a${i}`))
+    }
+    expect(useStore.getState().undoStack.length).toBeLessThanOrEqual(20)
+  })
+
+  test('deleteAsset is undoable', async () => {
+    useStore.setState({ assets: [makeAsset('victim'), makeAsset('keeper')] })
+    await useStore.getState().deleteAsset('victim')
+    expect(useStore.getState().assets.map(a => a.id)).toEqual(['keeper'])
+
+    await useStore.getState().undo()
+    expect(useStore.getState().assets.map(a => a.id).sort()).toEqual(['keeper', 'victim'])
+  })
+
+  test('saveScenario / saveECM / savePortfolio all push undo entries', async () => {
+    await useStore.getState().saveScenario(makeScenario('s', 'a'))
+    await useStore.getState().saveECM(makeECM('e'))
+    await useStore.getState().savePortfolio(makePortfolio('p', ['a']))
+    expect(useStore.getState().undoStack).toHaveLength(3)
+    expect(useStore.getState().undoStack[0].label).toMatch(/scenario/)
+    expect(useStore.getState().undoStack[1].label).toMatch(/ECM/)
+    expect(useStore.getState().undoStack[2].label).toMatch(/portfolio/)
+  })
+
+  test('closeVault clears the undo stack', async () => {
+    await useStore.getState().saveAsset(makeAsset('a'))
+    expect(useStore.getState().undoStack).toHaveLength(1)
+    useStore.getState().closeVault()
+    expect(useStore.getState().undoStack).toHaveLength(0)
+  })
+
+  test('undoableLabel returns most recent label or null', async () => {
+    expect(useStore.getState().undoableLabel()).toBeNull()
+    await useStore.getState().saveAsset(makeAsset('a', 'Alpha'))
+    expect(useStore.getState().undoableLabel()).toMatch(/Alpha/)
+    await useStore.getState().undo()
+    expect(useStore.getState().undoableLabel()).toBeNull()
+  })
+})
 
 describe('closeVault', () => {
   test('clears every piece of vault state', () => {

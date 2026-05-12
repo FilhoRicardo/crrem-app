@@ -59,6 +59,91 @@ export function hasClimateData(country: string): boolean {
   return !!(CLIMATE[country] ?? CLIMATE[canonCountry(country)])
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// NUTS-3 ZIP-level climate (lazy-loaded; ~6 MB raw / 600 kB gzipped)
+//
+// Loaded on demand from /eu-climate-nuts3.json the first time someone calls
+// loadEuNuts3Climate(). Once loaded, getClimateFactorsByZip(country, zip)
+// returns the per-NUTS-3 row for that exact postal code instead of the
+// country aggregate. ~10× geographic precision.
+//
+// Falls back gracefully: if the file isn't available (e.g. offline) or the
+// ZIP isn't in the table, getClimateFactorsByZip returns null and callers
+// drop back to the country-aggregate getClimateFactors().
+// ────────────────────────────────────────────────────────────────────────────
+
+interface Nuts3Bundle {
+  climateNuts3: Record<string, ClimateRow>
+  zipToNuts3: Record<string, Record<string, string>>
+}
+let nuts3State: Nuts3Bundle | 'loading' | 'failed' | null = null
+let nuts3Promise: Promise<void> | null = null
+
+export function loadEuNuts3Climate(baseUrl = '/eu-climate-nuts3.json'): Promise<void> {
+  if (nuts3State && nuts3State !== 'failed') {
+    return nuts3State === 'loading' ? (nuts3Promise ?? Promise.resolve()) : Promise.resolve()
+  }
+  nuts3State = 'loading'
+  nuts3Promise = fetch(baseUrl)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json() as Promise<{ climateNuts3: Nuts3Bundle['climateNuts3']; zipToNuts3: Nuts3Bundle['zipToNuts3'] }>
+    })
+    .then(data => {
+      nuts3State = { climateNuts3: data.climateNuts3, zipToNuts3: data.zipToNuts3 }
+    })
+    .catch(err => {
+      console.warn('NUTS-3 climate data unavailable, falling back to country-level:', err)
+      nuts3State = 'failed'
+    })
+  return nuts3Promise
+}
+
+export function isNuts3Loaded(): boolean {
+  return !!nuts3State && nuts3State !== 'loading' && nuts3State !== 'failed'
+}
+
+/**
+ * NUTS-3-precision climate factors for a country + postal code.
+ * Returns null when:
+ *   - NUTS-3 bundle isn't loaded yet (call loadEuNuts3Climate() first)
+ *   - country isn't in the EU-30 covered by the bundle
+ *   - ZIP isn't in the lookup
+ *
+ * Callers should fall back to getClimateFactors(country, year, scenario)
+ * which always returns *something* (country-level or null).
+ */
+export function getClimateFactorsByZip(
+  country: string,
+  postalCode: string,
+  year: number,
+  scenario: ClimateScenario = 'rcp45',
+): { heatingFactor: number; coolingFactor: number } | null {
+  if (scenario === 'none') return { heatingFactor: 1, coolingFactor: 1 }
+  if (!nuts3State || nuts3State === 'loading' || nuts3State === 'failed') return null
+  const c = canonCountry(country)
+  const zipMap = nuts3State.zipToNuts3[c] ?? nuts3State.zipToNuts3[country]
+  if (!zipMap) return null
+  // Try exact ZIP, then progressively shorter prefixes (handles padded codes)
+  let code = String(postalCode).trim()
+  let nuts3: string | undefined
+  while (code.length > 0 && !nuts3) {
+    nuts3 = zipMap[code]
+    if (!nuts3) code = code.slice(0, -1)
+  }
+  if (!nuts3) return null
+  const row = nuts3State.climateNuts3[nuts3]
+  if (!row) return null
+  const yrs = year - row.baselineYear
+  if (yrs === 0) return { heatingFactor: 1, coolingFactor: 1 }
+  const hddPa = scenario === 'rcp85' ? row.hdd85Pa : row.hdd45Pa
+  const cddPa = scenario === 'rcp85' ? row.cdd85Pa : row.cdd45Pa
+  return {
+    heatingFactor: Math.pow(1 + hddPa / 100, yrs),
+    coolingFactor: Math.pow(1 + cddPa / 100, yrs),
+  }
+}
+
 export const CRREM_DATA_META = data.meta as {
   generated: string
   source: string

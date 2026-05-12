@@ -13,6 +13,47 @@ import {
 export type VaultMode = 'none' | 'sample' | 'fsa'
 export type ViewMode = 'asset' | 'portfolio' | 'properties' | 'usage'
 
+const UNDO_DEPTH = 20
+
+interface UndoSnapshot {
+  assets: Asset[]
+  scenarios: Scenario[]
+  ecms: ECM[]
+  portfolios: Portfolio[]
+  /** Human-readable description shown in the undo button + history list */
+  label: string
+  /** ms timestamp */
+  ts: number
+}
+
+/**
+ * Capture the pre-mutation state into the undo stack. Called at the very
+ * start of every save/delete action. Caps at UNDO_DEPTH — older snapshots
+ * fall off the back.
+ *
+ * Cheap because state arrays hold references (assets/scenarios are typically
+ * <100 items each); deep copy isn't needed because the engine never mutates
+ * the entity objects in place — every save call replaces the slot.
+ */
+function pushUndo(
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+  label: string,
+): void {
+  const s = get()
+  const snap: UndoSnapshot = {
+    assets: s.assets,
+    scenarios: s.scenarios,
+    ecms: s.ecms,
+    portfolios: s.portfolios,
+    label,
+    ts: Date.now(),
+  }
+  const next = [...s.undoStack, snap]
+  if (next.length > UNDO_DEPTH) next.shift()
+  set({ undoStack: next })
+}
+
 interface AppState {
   // Vault state — vaultDir is non-serialisable; do NOT add persist middleware.
   vaultDir: FileSystemDirectoryHandle | null
@@ -55,6 +96,12 @@ interface AppState {
   deleteAsset: (assetId: string) => Promise<void>
   savePortfolio: (portfolio: Portfolio) => Promise<void>
   deletePortfolio: (portfolioId: string) => Promise<void>
+
+  // Undo
+  undoStack: UndoSnapshot[]
+  undo: () => Promise<void>
+  /** Description of the most recent undoable change, or null if nothing to undo. */
+  undoableLabel: () => string | null
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -74,6 +121,86 @@ export const useStore = create<AppState>((set, get) => ({
   activeScenarioIds: [],
   selectedPortfolioId: null,
   ecmPanelOpen: false,
+
+  undoStack: [],
+  undoableLabel: (): string | null => {
+    const stack = get().undoStack
+    return stack.length > 0 ? stack[stack.length - 1].label : null
+  },
+  undo: async () => {
+    const { undoStack, vaultMode, vaultDir, assets, scenarios, ecms, portfolios } = get()
+    if (undoStack.length === 0) return
+    const snap = undoStack[undoStack.length - 1]
+
+    // Compute the diff against the current state so we can mirror it to disk
+    // in FSA mode without re-writing every file (each save call rewrites
+    // anyway, but only the changed ones).
+    const newAssets = snap.assets
+    const newScenarios = snap.scenarios
+    const newEcms = snap.ecms
+    const newPortfolios = snap.portfolios
+
+    set({
+      assets: newAssets,
+      scenarios: newScenarios,
+      ecms: newEcms,
+      portfolios: newPortfolios,
+      undoStack: undoStack.slice(0, -1),
+    })
+
+    if (vaultMode === 'fsa' && vaultDir) {
+      // Mirror the snapshot to disk: write any changed entity, delete any
+      // entity that was present before this undo but isn't in the snapshot.
+      try {
+        for (const a of newAssets) {
+          const before = assets.find(x => x.id === a.id)
+          if (!before || JSON.stringify(before) !== JSON.stringify(a)) {
+            await writeAssetToVault(vaultDir, a)
+          }
+        }
+        for (const old of assets) {
+          if (!newAssets.find(a => a.id === old.id)) {
+            await deleteAssetFromVault(vaultDir, old.id)
+          }
+        }
+        for (const s of newScenarios) {
+          const before = scenarios.find(x => x.id === s.id)
+          if (!before || JSON.stringify(before) !== JSON.stringify(s)) {
+            await writeScenarioToVault(vaultDir, s)
+          }
+        }
+        for (const old of scenarios) {
+          if (!newScenarios.find(s => s.id === old.id)) {
+            await deleteScenarioFromVault(vaultDir, old.id)
+          }
+        }
+        for (const e of newEcms) {
+          const before = ecms.find(x => x.id === e.id)
+          if (!before || JSON.stringify(before) !== JSON.stringify(e)) {
+            await writeECMToVault(vaultDir, e)
+          }
+        }
+        for (const old of ecms) {
+          if (!newEcms.find(e => e.id === old.id)) {
+            await deleteECMFromVault(vaultDir, old.id)
+          }
+        }
+        for (const p of newPortfolios) {
+          const before = portfolios.find(x => x.id === p.id)
+          if (!before || JSON.stringify(before) !== JSON.stringify(p)) {
+            await writePortfolioToVault(vaultDir, p)
+          }
+        }
+        for (const old of portfolios) {
+          if (!newPortfolios.find(p => p.id === old.id)) {
+            await deletePortfolioFromVault(vaultDir, old.id)
+          }
+        }
+      } catch (e) {
+        set(s => ({ loadErrors: [...s.loadErrors, `Undo write-back: ${e instanceof Error ? e.message : String(e)}`] }))
+      }
+    }
+  },
 
   openVaultFromFSA: async () => {
     set({ vaultLoading: true, loadErrors: [] })
@@ -97,6 +224,7 @@ export const useStore = create<AppState>((set, get) => ({
         selectedAssetId: firstAsset,
         activeScenarioIds: firstAssetScenarios,
         selectedPortfolioId: v.portfolios[0]?.id ?? null,
+        undoStack: [],
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -127,6 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
         selectedAssetId: firstAsset,
         activeScenarioIds: firstAssetScenarios,
         selectedPortfolioId: v.portfolios[0]?.id ?? null,
+        undoStack: [],
       })
     } catch (e) {
       set({ loadErrors: [e instanceof Error ? e.message : String(e)] })
@@ -158,6 +287,7 @@ export const useStore = create<AppState>((set, get) => ({
     assets: [], scenarios: [], ecms: [], portfolios: [],
     selectedAssetId: null, activeScenarioIds: [], selectedPortfolioId: null,
     loadErrors: [],
+    undoStack: [],
   }),
 
   selectAsset: (id) => {
@@ -184,6 +314,7 @@ export const useStore = create<AppState>((set, get) => ({
   setECMPanelOpen: (open) => set({ ecmPanelOpen: open }),
 
   saveScenario: async (scenario) => {
+    pushUndo(get, set, `Save scenario "${scenario.name}"`)
     const { vaultMode, vaultDir, scenarios } = get()
     const next = scenarios.some(s => s.id === scenario.id)
       ? scenarios.map(s => (s.id === scenario.id ? scenario : s))
@@ -199,6 +330,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteScenario: async (scenarioId) => {
+    pushUndo(get, set, `Delete scenario`)
     const { vaultMode, vaultDir, scenarios, activeScenarioIds } = get()
     set({
       scenarios: scenarios.filter(s => s.id !== scenarioId),
@@ -214,6 +346,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   saveECM: async (ecm) => {
+    pushUndo(get, set, `Save ECM "${ecm.name}"`)
     const { vaultMode, vaultDir, ecms } = get()
     const next = ecms.some(x => x.id === ecm.id)
       ? ecms.map(x => (x.id === ecm.id ? ecm : x))
@@ -229,6 +362,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   saveAsset: async (asset) => {
+    pushUndo(get, set, `Save asset "${asset.name}"`)
     const { vaultMode, vaultDir, assets, selectedAssetId } = get()
     const next = assets.some(a => a.id === asset.id)
       ? assets.map(a => (a.id === asset.id ? asset : a))
@@ -247,6 +381,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteAsset: async (assetId) => {
+    pushUndo(get, set, `Delete asset`)
     const { vaultMode, vaultDir, assets, selectedAssetId } = get()
     const remaining = assets.filter(a => a.id !== assetId)
     set({
@@ -263,6 +398,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   savePortfolio: async (portfolio) => {
+    pushUndo(get, set, `Save portfolio "${portfolio.name}"`)
     const { vaultMode, vaultDir, portfolios, selectedPortfolioId } = get()
     const next = portfolios.some(p => p.id === portfolio.id)
       ? portfolios.map(p => (p.id === portfolio.id ? portfolio : p))
@@ -281,6 +417,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deletePortfolio: async (portfolioId) => {
+    pushUndo(get, set, `Delete portfolio`)
     const { vaultMode, vaultDir, portfolios, selectedPortfolioId } = get()
     const remaining = portfolios.filter(p => p.id !== portfolioId)
     set({
@@ -297,6 +434,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteECM: async (ecmId) => {
+    pushUndo(get, set, `Delete ECM`)
     const { vaultMode, vaultDir, ecms } = get()
     set({ ecms: ecms.filter(x => x.id !== ecmId) })
     if (vaultMode === 'fsa' && vaultDir) {

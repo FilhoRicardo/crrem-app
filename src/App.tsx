@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from './store'
+import { loadEuNuts3Climate } from './engine/providers'
 import VaultPicker from './components/VaultPicker'
 import Header from './components/Header'
 import AssetList from './components/AssetList'
@@ -17,6 +18,34 @@ export default function App() {
   const assets = useStore(s => s.assets)
   const selectedAssetId = useStore(s => s.selectedAssetId)
   const reloadVault = useStore(s => s.reloadVault)
+  const undo = useStore(s => s.undo)
+  const undoStackLength = useStore(s => s.undoStack.length)
+
+  // Lazy-load the NUTS-3 climate bundle (~600 kB gzipped) in the background
+  // once a vault is open. We don't block first paint on it — country-level
+  // climate factors continue to work; NUTS-3 just unlocks ZIP-precision once
+  // it arrives. Triggered async on vault open so app shell stays snappy.
+  useEffect(() => {
+    if (vaultMode === 'none') return
+    void loadEuNuts3Climate()
+  }, [vaultMode])
+
+  // Ctrl/Cmd+Z → undo last mutation. No-op when there's nothing to undo
+  // and when focus is in a text input (so it doesn't fight native undo).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
+      if (e.shiftKey) return  // Ctrl+Shift+Z is redo, which we don't have
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+      if (undoStackLength === 0) return
+      e.preventDefault()
+      void undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, undoStackLength])
 
   // Auto-rescan the vault when the window regains focus.
   // Lets the user edit .md files in Obsidian or any text editor and see changes

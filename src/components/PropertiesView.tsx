@@ -8,6 +8,7 @@ import { parseAssetsCsv, ASSETS_CSV_TEMPLATE } from '../utils/csvAssets'
 import TemplateButton from './TemplateButton'
 import ActualsEditor from './ActualsEditor'
 import ImportButton from './ImportButton'
+import AssetCompare from './AssetCompare'
 
 const CARRIERS: Carrier[] = [
   'Elec_Grid', 'District_Heating', 'District_Cooling', 'Gas', 'Oil', 'Biomass',
@@ -365,6 +366,7 @@ export default function PropertiesView() {
   const [editing, setEditing] = useState<Asset | null>(null)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState('')
+  const [comparing, setComparing] = useState<{ left: string | null; right: string | null } | null>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
 
   const handleCsvImport = async (file: File) => {
@@ -498,6 +500,15 @@ export default function PropertiesView() {
             disabled={readOnly}
             onImport={async file => { await saveAsset(await importAssetFile(file)) }}
           />
+          {assets.length >= 2 && (
+            <button
+              onClick={() => setComparing({ left: assets[0]?.id ?? null, right: assets[1]?.id ?? null })}
+              className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium transition-colors"
+              title="Compare two assets side-by-side"
+            >
+              ⇄ Compare assets
+            </button>
+          )}
           <button
             onClick={() => setCreating(true)}
             disabled={readOnly}
@@ -508,6 +519,13 @@ export default function PropertiesView() {
           </button>
         </div>
       </div>
+      {comparing && (
+        <AssetCompare
+          initialLeftId={comparing.left}
+          initialRightId={comparing.right}
+          onClose={() => setComparing(null)}
+        />
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
         {assets.length === 0 ? (

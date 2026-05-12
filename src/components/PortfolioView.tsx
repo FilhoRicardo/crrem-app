@@ -10,6 +10,7 @@ import { exportPortfolioReport } from '../utils/report'
 import TemplateButton from './TemplateButton'
 import ImportButton from './ImportButton'
 import PortfolioForm, { emptyPortfolio } from './PortfolioForm'
+import RetrofitCampaign from './RetrofitCampaign'
 
 interface AssetRollup {
   asset: Asset
@@ -149,6 +150,7 @@ export default function PortfolioView() {
   const allScenarios = useStore(s => s.scenarios)
   const [editing, setEditing] = useState<Portfolio | null>(null)
   const [creating, setCreating] = useState(false)
+  const [showCampaign, setShowCampaign] = useState(false)
   const portfolioChartRef = useRef<HTMLDivElement | null>(null)
 
   const portfolio = useMemo(
@@ -294,6 +296,14 @@ export default function PortfolioView() {
             }}
           />
           <button
+            onClick={() => setShowCampaign(true)}
+            disabled={readOnly || allAssets.length === 0}
+            className="text-xs px-3 py-1.5 rounded-lg border border-crrem-navy text-crrem-navy hover:bg-crrem-navy hover:text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Apply one ECM across many assets in one click — saves manually editing each asset"
+          >
+            ⚡ Retrofit campaign
+          </button>
+          <button
             onClick={() => setCreating(true)}
             disabled={readOnly}
             className="text-sm px-4 py-2 rounded-lg bg-crrem-navy text-white font-medium shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
@@ -303,6 +313,8 @@ export default function PortfolioView() {
           </button>
         </div>
       </div>
+
+      {showCampaign && <RetrofitCampaign onClose={() => setShowCampaign(false)} />}
 
       {/* Portfolio pill row — always visible so all portfolios are one click away */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">

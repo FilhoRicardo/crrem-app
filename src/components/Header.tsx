@@ -9,6 +9,9 @@ export default function Header() {
   const closeVault = useStore(s => s.closeVault)
   const setECMPanelOpen = useStore(s => s.setECMPanelOpen)
   const ecms = useStore(s => s.ecms.length)
+  const undoStack = useStore(s => s.undoStack)
+  const undo = useStore(s => s.undo)
+  const undoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : null
 
   return (
     <header className="flex-shrink-0 flex items-center gap-3 px-6 py-3 text-white bg-crrem-navy">
@@ -25,6 +28,15 @@ export default function Header() {
         )}
       </span>
       <div className="ml-auto flex items-center gap-2">
+        {undoLabel && (
+          <button
+            onClick={() => undo()}
+            className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md transition-colors"
+            title={`Undo: ${undoLabel} (Ctrl+Z)`}
+          >
+            ↶ Undo <span className="text-white/50 ml-1">{undoStack.length}</span>
+          </button>
+        )}
         <button
           onClick={() => setECMPanelOpen(true)}
           className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md transition-colors"
