@@ -5,6 +5,7 @@ import Timeline from './Timeline'
 import RetrofitDrawer from './RetrofitDrawer'
 import ScenarioPanel from './ScenarioPanel'
 import CostSummaryCard from './CostSummaryCard'
+import MACCChart from './MACCChart'
 import ScenarioCompare from './ScenarioCompare'
 import { efProvider, pathwayProvider } from '../engine/providers'
 import { analyseScenarioCost } from '../engine/cost'
@@ -89,6 +90,23 @@ export default function AssetDetail({ asset }: Props) {
       if (!targetScenario) return
       const ecm = ecms.find(x => x.id === detail.ecmId)
       if (!ecm) return
+      // Auto-fill capex + embodied from the ECM's per-m² rates × asset GIA.
+      // Falls back to capex_total / embodied_carbon_kg if the ECM ships absolute values.
+      const ecmCost = ecm.cost
+      const capexPerM2 = ecmCost?.capex_per_m2_typical ?? ecmCost?.capex_per_m2
+      const capexAbs = ecmCost?.capex_total
+      const capexTotal = typeof capexPerM2 === 'number'
+        ? capexPerM2 * asset.gia_m2
+        : typeof capexAbs === 'number' ? capexAbs : undefined
+      const embodiedPerM2 = ecmCost?.embodied_carbon_kg_per_m2
+      const embodiedAbs = ecmCost?.embodied_carbon_kg
+      const embodiedKg = typeof embodiedPerM2 === 'number'
+        ? embodiedPerM2 * asset.gia_m2
+        : typeof embodiedAbs === 'number' ? embodiedAbs : undefined
+      const lifetime = ecm.payback_years_range
+        // ECM doesn't carry lifetime directly; leave blank unless we want to default
+        ? undefined
+        : undefined
       const newRetrofit: Retrofit = {
         id: `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         year: detail.year,
@@ -100,6 +118,14 @@ export default function AssetDetail({ asset }: Props) {
           mode: imp.mode,
           value: imp.value_typical,
         })),
+        cost: (capexTotal !== undefined || embodiedKg !== undefined)
+          ? {
+              ...(capexTotal !== undefined ? { capex_total: capexTotal } : {}),
+              ...(embodiedKg !== undefined ? { embodied_carbon_kg: embodiedKg } : {}),
+              currency: ecmCost?.currency ?? asset.utility_prices?.currency,
+            }
+          : undefined,
+        ...(lifetime !== undefined ? { lifetime_years: lifetime } : {}),
       }
       const next: Scenario = {
         ...targetScenario,
@@ -208,6 +234,8 @@ export default function AssetDetail({ asset }: Props) {
           />
 
           <CostSummaryCard asset={asset} scenario={editScenario} />
+
+          <MACCChart asset={asset} scenario={editScenario} />
 
           {selectedYear != null && (
             <RetrofitDrawer

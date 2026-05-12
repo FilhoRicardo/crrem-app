@@ -2,6 +2,32 @@ import { useMemo, useState } from 'react'
 import type { Asset, Scenario } from '../engine/types'
 import { analyseScenarioCost } from '../engine/cost'
 
+/** Apply a ± shift to all utility_prices (proportional). Pure helper. */
+function asWithPriceShift(asset: Asset, pricePct: number): Asset {
+  if (pricePct === 0 || !asset.utility_prices) return asset
+  const factor = 1 + pricePct / 100
+  const up = { ...asset.utility_prices }
+  for (const k of Object.keys(up) as Array<keyof typeof up>) {
+    if (k === 'currency' || k === 'escalation_pct_per_year') continue
+    const v = up[k]
+    if (typeof v === 'number') (up as Record<string, unknown>)[k] = v * factor
+  }
+  return { ...asset, utility_prices: up }
+}
+
+/** Apply a ± shift to all retrofit capex (proportional). Pure helper. */
+function scenarioWithCapexShift(scenario: Scenario, capexPct: number): Scenario {
+  if (capexPct === 0) return scenario
+  const factor = 1 + capexPct / 100
+  return {
+    ...scenario,
+    retrofits: scenario.retrofits.map(r => {
+      if (!r.cost?.capex_total) return r
+      return { ...r, cost: { ...r.cost, capex_total: r.cost.capex_total * factor } }
+    }),
+  }
+}
+
 interface Props {
   asset: Asset
   scenario: Scenario
@@ -33,10 +59,17 @@ function fmtPct(n: number | null): string {
 export default function CostSummaryCard({ asset, scenario }: Props) {
   const [discountPct, setDiscountPct] = useState(DEFAULT_DISCOUNT_PCT)
   const [horizonYears, setHorizonYears] = useState(DEFAULT_HORIZON_YEARS)
+  const [showSensitivity, setShowSensitivity] = useState(false)
+  const [pricePct, setPricePct] = useState(0)
+  const [capexPct, setCapexPct] = useState(0)
+
+  // Apply sensitivity shifts before passing to the engine
+  const adjustedAsset = useMemo(() => asWithPriceShift(asset, pricePct), [asset, pricePct])
+  const adjustedScenario = useMemo(() => scenarioWithCapexShift(scenario, capexPct), [scenario, capexPct])
 
   const summary = useMemo(
-    () => analyseScenarioCost(asset, scenario.retrofits, { discountRatePct: discountPct, horizonYears }),
-    [asset, scenario.retrofits, discountPct, horizonYears],
+    () => analyseScenarioCost(adjustedAsset, adjustedScenario.retrofits, { discountRatePct: discountPct, horizonYears }),
+    [adjustedAsset, adjustedScenario.retrofits, discountPct, horizonYears],
   )
 
   if (scenario.retrofits.length === 0) return null
@@ -86,8 +119,49 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
               title="Years of savings to project. Defaults to 25 (CRREM trajectory length)."
             />
           </label>
+          <button
+            onClick={() => setShowSensitivity(s => !s)}
+            className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${
+              showSensitivity ? 'bg-crrem-navy text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            title="Sensitivity sliders — see how NPV / IRR / payback change with energy-price and capex shifts"
+          >
+            ± Sensitivity
+          </button>
         </div>
       </div>
+
+      {showSensitivity && (
+        <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
+            What-if sensitivity {(pricePct !== 0 || capexPct !== 0) && (
+              <span className="text-amber-600 ml-2 normal-case font-normal">
+                · numbers above reflect shifted inputs
+              </span>
+            )}
+          </div>
+          <SensSlider
+            label="Energy prices"
+            value={pricePct}
+            onChange={setPricePct}
+            help="Shift every utility_price proportionally. Useful for testing what happens if prices spike or drop."
+          />
+          <SensSlider
+            label="Capex"
+            value={capexPct}
+            onChange={setCapexPct}
+            help="Shift every retrofit's capex_total proportionally. Test cost-overrun and cost-undershoot scenarios."
+          />
+          {(pricePct !== 0 || capexPct !== 0) && (
+            <button
+              onClick={() => { setPricePct(0); setCapexPct(0) }}
+              className="text-xs text-crrem-navy hover:underline"
+            >
+              Reset to baseline
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-6 gap-3 mb-4">
         <Stat label="Total capex" value={fmtMoney(summary.totalCapex, summary.currency)} />
@@ -184,6 +258,30 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function SensSlider({ label, value, onChange, help }: {
+  label: string; value: number; onChange: (n: number) => void; help: string
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-slate-600 font-medium" title={help}>{label}</span>
+        <span className={`tabular-nums font-semibold ${value === 0 ? 'text-slate-500' : value > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+          {value > 0 ? '+' : ''}{value}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={-50}
+        max={50}
+        step={5}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="w-full accent-crrem-navy"
+      />
     </div>
   )
 }
