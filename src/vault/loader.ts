@@ -202,6 +202,8 @@ function parseRetrofit(r: unknown, idx: number, filename: string): Retrofit {
       }
     }),
     cost: isObj(r.cost) ? (r.cost as Retrofit['cost']) : undefined,
+    lifetime_years: typeof r.lifetime_years === 'number' && r.lifetime_years > 0
+      ? r.lifetime_years : undefined,
   }
 }
 
@@ -419,6 +421,9 @@ function scenarioToFrontmatter(s: Scenario): Record<string, unknown> {
     }
     if (r.ecm_id) out.ecm_id = r.ecm_id
     if (r.cost) out.cost = r.cost
+    if (typeof r.lifetime_years === 'number' && r.lifetime_years > 0) {
+      out.lifetime_years = r.lifetime_years
+    }
     return out
   })
   return fm

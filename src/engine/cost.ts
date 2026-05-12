@@ -122,8 +122,12 @@ export interface ScenarioCostSummary {
   discountRatePct: number
   /** Horizon (years) over which NPV/IRR were computed. */
   horizonYears: number
-  /** Total embodied carbon (kgCO₂e) across all retrofits in the scenario. */
+  /** Total embodied carbon (kgCO₂e) across all retrofits + replacements. */
   totalEmbodiedCarbonKg: number
+  /** Replacement capex over the horizon (lifetime_years cycles), in currency. */
+  replacementCapex: number
+  /** Replacement-driven embodied carbon (kgCO₂e), already included in totalEmbodiedCarbonKg. */
+  replacementEmbodiedCarbonKg: number
 }
 
 export interface FinanceParams {
@@ -167,13 +171,39 @@ export function analyseScenarioCost(
   const discountRatePct = finance.discountRatePct
   const escPct = asset.utility_prices?.escalation_pct_per_year ?? 0
 
+  // ─── Replacement-aware capex + embodied carbon stream ─────────────────────
+  // For each retrofit with a lifetime_years, replicate the capex + embodied
+  // hit at every multiple of lifetime within the horizon. The first install
+  // is at retrofit.year; replacements fire at year + lifetime, year + 2*lifetime, …
+  //
+  // This drives the cashflow stream below (including discounted payback +
+  // NPV / IRR) and the totalReplacementCapex / totalEmbodiedCarbonKg outputs.
+  const startYear = ordered[0]?.year ?? 0
+  const totalYears = horizonYears + 1
+  const replacementCapexByYear = new Array<number>(totalYears).fill(0)
+  const replacementEmbodiedByYear = new Array<number>(totalYears).fill(0)
+  let replacementCapex = 0
+  let replacementEmbodied = 0
+  for (const r of perRetrofit) {
+    const lifetime = r.retrofit.lifetime_years
+    if (!lifetime || lifetime <= 0) continue
+    let nextYear = r.retrofit.year + lifetime
+    while (nextYear <= startYear + horizonYears) {
+      const ti = nextYear - startYear
+      if (ti >= 0 && ti < totalYears) {
+        replacementCapexByYear[ti] += r.capex
+        replacementEmbodiedByYear[ti] += r.embodiedCarbonKg
+        replacementCapex += r.capex
+        replacementEmbodied += r.embodiedCarbonKg
+      }
+      nextYear += lifetime
+    }
+  }
+
   let npv: number | null = null
   let irr: number | null = null
   let discountedPaybackYears: number | null = null
   if (totalAnnualSavings !== null && perRetrofit.length > 0) {
-    const startYear = ordered[0].year
-    // Build a per-year cashflow array indexed from the first retrofit's year.
-    const totalYears = horizonYears + 1
     const cashflows = new Array<number>(totalYears).fill(0)
     for (const r of perRetrofit) {
       const ti = r.retrofit.year - startYear
@@ -186,22 +216,25 @@ export function analyseScenarioCost(
         }
       }
     }
+    // Replacement capex events
+    for (let t = 0; t < totalYears; t++) {
+      if (replacementCapexByYear[t] > 0) cashflows[t] -= replacementCapexByYear[t]
+    }
     npv = computeNPV(cashflows, discountRatePct)
     irr = computeIRR(cashflows)
-    if (totalAnnualSavings > 0 && totalCapex > 0) {
-      // Build a flat-from-year-1 savings stream (sum of all retrofits' savings,
-      // escalated, indexed from the first install year).
+    if (totalAnnualSavings > 0 && (totalCapex + replacementCapex) > 0) {
       const annualStream: number[] = []
       for (let t = 1; t < totalYears; t++) annualStream.push(cashflows[t])
-      discountedPaybackYears = computeDiscountedPaybackYears(totalCapex, annualStream, discountRatePct)
+      discountedPaybackYears = computeDiscountedPaybackYears(totalCapex + replacementCapex, annualStream, discountRatePct)
     }
   }
 
-  const totalEmbodiedCarbonKg = perRetrofit.reduce((s, r) => s + r.embodiedCarbonKg, 0)
+  const totalEmbodiedCarbonKg = perRetrofit.reduce((s, r) => s + r.embodiedCarbonKg, 0) + replacementEmbodied
 
   return {
     perRetrofit, totalCapex, totalAnnualSavings, averagePaybackYears, discountedPaybackYears, currency,
     hasMissingPrices, npv, irr, discountRatePct, horizonYears, totalEmbodiedCarbonKg,
+    replacementCapex, replacementEmbodiedCarbonKg: replacementEmbodied,
   }
 }
 

@@ -121,6 +121,25 @@ function RetrofitCard({ retrofit, ecms, onChange, onRemove, readOnly }: CardProp
             placeholder="0"
           />
         </label>
+        <label
+          className="text-xs text-slate-500 flex items-center gap-1.5"
+          title="Useful life in years. When set, the retrofit is automatically replaced every N years for the rest of the trajectory — capex + embodied carbon hit again at each replacement. Leave blank for one-and-done items (envelope, structural). Typical values: LEDs 10, heat pumps 15, boilers 20, PV inverters 12."
+        >
+          Lifetime (yr)
+          <input
+            type="number"
+            min={1}
+            max={50}
+            step={1}
+            value={retrofit.lifetime_years ?? ''}
+            onChange={e => {
+              const v = Number(e.target.value)
+              onChange({ ...retrofit, lifetime_years: Number.isFinite(v) && v > 0 ? v : undefined })
+            }}
+            className="w-20 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
+            placeholder="—"
+          />
+        </label>
       </div>
       <div className="space-y-2">
         {retrofit.impacts.map((imp, i) => (

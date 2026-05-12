@@ -273,3 +273,76 @@ describe('embodied carbon', () => {
     expect(a.capex).toBe(b.capex)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retrofit lifetime + replacement modelling
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('retrofit lifetime + replacement', () => {
+  function ledWithLifetime(year: number, lifetime?: number, capex = 100_000, embodied = 5_000): Retrofit {
+    return {
+      id: 'r-led', year, name: 'LED',
+      impacts: [{ carrier: 'Elec_Grid', operation: 'reduce', mode: 'percent', value: 18 }],
+      cost: { capex_total: capex, currency: 'USD', embodied_carbon_kg: embodied },
+      lifetime_years: lifetime,
+    }
+  }
+
+  test('no lifetime → zero replacement capex / embodied', () => {
+    const summary = analyseScenarioCost(baseAsset, [ledWithLifetime(2025)])
+    expect(summary.replacementCapex).toBe(0)
+    expect(summary.replacementEmbodiedCarbonKg).toBe(0)
+    expect(summary.totalEmbodiedCarbonKg).toBe(5_000)  // just the install
+  })
+
+  test('LED installed 2025 with 10yr life → replaces in 2035, 2045 over 25yr horizon', () => {
+    const summary = analyseScenarioCost(
+      baseAsset,
+      [ledWithLifetime(2025, 10)],
+      { discountRatePct: 0, horizonYears: 25 },
+    )
+    // 2025 install + 2035 replacement + 2045 replacement = 2 replacements within horizon
+    expect(summary.replacementCapex).toBe(200_000)  // 2 × 100k
+    expect(summary.replacementEmbodiedCarbonKg).toBe(10_000)  // 2 × 5k
+    // totalEmbodiedCarbonKg = install (5k) + replacements (10k) = 15k
+    expect(summary.totalEmbodiedCarbonKg).toBe(15_000)
+  })
+
+  test('replacement capex hits NPV (NPV with lifetime < NPV without)', () => {
+    const oneShot = analyseScenarioCost(
+      baseAsset,
+      [ledWithLifetime(2025)],
+      { discountRatePct: 5, horizonYears: 25 },
+    )
+    const cycled = analyseScenarioCost(
+      baseAsset,
+      [ledWithLifetime(2025, 10)],
+      { discountRatePct: 5, horizonYears: 25 },
+    )
+    expect(cycled.npv).not.toBeNull()
+    expect(oneShot.npv).not.toBeNull()
+    expect(cycled.npv!).toBeLessThan(oneShot.npv!)
+  })
+
+  test('lifetime > horizon → no replacements within window', () => {
+    const summary = analyseScenarioCost(
+      baseAsset,
+      [ledWithLifetime(2025, 30)],
+      { discountRatePct: 0, horizonYears: 25 },
+    )
+    // First replacement would be 2025+30=2055, beyond 2025+25=2050 → no replacement
+    expect(summary.replacementCapex).toBe(0)
+    expect(summary.replacementEmbodiedCarbonKg).toBe(0)
+  })
+
+  test('lifetime == horizon → replacement falls exactly at horizon end (boundary)', () => {
+    // 2025 install + 25yr lifetime → replacement in 2050, exactly at startYear + horizonYears
+    const summary = analyseScenarioCost(
+      baseAsset,
+      [ledWithLifetime(2025, 25)],
+      { discountRatePct: 0, horizonYears: 25 },
+    )
+    // Boundary is inclusive (replacement at year startYear + horizonYears counts)
+    expect(summary.replacementCapex).toBe(100_000)
+  })
+})

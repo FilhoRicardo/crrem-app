@@ -47,6 +47,24 @@ export interface Retrofit {
   ecm_id?: string
   impacts: RetrofitImpact[]
   cost?: RetrofitCost
+  /**
+   * Useful life in years. When set, the retrofit is automatically replaced
+   * every `lifetime_years` years for the rest of the trajectory:
+   *   - operational impacts continue (assumed to be re-installed identically)
+   *   - capex hits the cost ledger again at each replacement year
+   *   - embodied carbon hits the carbon ledger again at each replacement year
+   *
+   * Realistic CRREM-relevant values:
+   *   - LED lighting: 10
+   *   - Heat pumps / VRF: 15
+   *   - Boilers: 20
+   *   - PV inverters: 12 (panels last 25-30, inverters need replacing)
+   *   - Building fabric / envelope: usually omitted (50+ yr, exceeds horizon)
+   *
+   * Defaults to undefined (no replacement) so existing scenarios stay
+   * reproducible.
+   */
+  lifetime_years?: number
 }
 
 /** Per-year calculation output. */
