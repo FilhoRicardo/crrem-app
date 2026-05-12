@@ -89,7 +89,7 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-6 gap-3 mb-4">
         <Stat label="Total capex" value={fmtMoney(summary.totalCapex, summary.currency)} />
         <Stat
           label="Annual savings"
@@ -97,12 +97,22 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
           tone={summary.totalAnnualSavings !== null && summary.totalAnnualSavings > 0 ? 'green' : undefined}
         />
         <Stat
-          label="Avg payback"
+          label="Payback (simple)"
           value={fmtYears(summary.averagePaybackYears)}
           tone={
             summary.averagePaybackYears == null ? undefined
               : summary.averagePaybackYears <= 7 ? 'green'
               : summary.averagePaybackYears <= 15 ? 'amber'
+              : 'red'
+          }
+        />
+        <Stat
+          label={`Payback @ ${discountPct}%`}
+          value={fmtYears(summary.discountedPaybackYears)}
+          tone={
+            summary.discountedPaybackYears == null ? undefined
+              : summary.discountedPaybackYears <= 10 ? 'green'
+              : summary.discountedPaybackYears <= 20 ? 'amber'
               : 'red'
           }
         />
@@ -123,6 +133,20 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
         />
       </div>
 
+      {summary.totalEmbodiedCarbonKg > 0 && (
+        <div className="bg-slate-50 rounded-xl p-3 mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500">Embodied carbon (one-time)</div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              Manufacturing + transport + installation. Operational savings need to outweigh this for the scenario to be net-positive over its lifetime.
+            </div>
+          </div>
+          <div className="text-lg font-bold text-amber-600 tabular-nums">
+            {Math.round(summary.totalEmbodiedCarbonKg).toLocaleString()} kgCO₂e
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs tabular-nums">
           <thead className="text-slate-500 uppercase tracking-wider">
@@ -133,6 +157,7 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
               <th className="px-2 py-1.5 text-right">kWh saved</th>
               <th className="px-2 py-1.5 text-right">Annual savings</th>
               <th className="px-2 py-1.5 text-right">Payback</th>
+              <th className="px-2 py-1.5 text-right">Embodied (kgCO₂e)</th>
             </tr>
           </thead>
           <tbody>
@@ -150,6 +175,9 @@ export default function CostSummaryCard({ asset, scenario }: Props) {
                     {fmtMoney(r.annualSavings, r.currency)}
                   </td>
                   <td className="px-2 py-1.5 text-right text-slate-700">{fmtYears(r.paybackYears)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-700">
+                    {r.embodiedCarbonKg > 0 ? Math.round(r.embodiedCarbonKg).toLocaleString() : '—'}
+                  </td>
                 </tr>
               )
             })}

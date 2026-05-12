@@ -111,3 +111,34 @@ export function buildCashflows(
   }
   return out
 }
+
+/**
+ * Discounted payback period — the year at which cumulative *discounted*
+ * savings first equal capex. Always longer than simple (undiscounted) payback.
+ *
+ * Returns null when discounted savings never reach capex within the horizon.
+ *
+ * Time semantics match computePaybackYears: index 0 of `annualSavings` is
+ * year 1 (the first year after install), index 1 is year 2, etc.
+ */
+export function computeDiscountedPaybackYears(
+  capex: number,
+  annualSavings: number[],
+  discountPct: number,
+): number | null {
+  if (capex <= 0) return null
+  const r = discountPct / 100
+  let cum = 0
+  for (let i = 0; i < annualSavings.length; i++) {
+    const t = i + 1  // year offset from install
+    const discounted = annualSavings[i] / Math.pow(1 + r, t)
+    const next = cum + discounted
+    if (next >= capex) {
+      const remaining = capex - cum
+      const fraction = discounted > 0 ? remaining / discounted : 0
+      return t - 1 + fraction  // fraction of the recovery year
+    }
+    cum = next
+  }
+  return null
+}

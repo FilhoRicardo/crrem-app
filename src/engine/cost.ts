@@ -1,6 +1,6 @@
 import type { Asset, Carrier, Retrofit, EnergyMap } from './types'
 import { applyRetrofitsForYear } from './calculate'
-import { computeNPV, computeIRR, computePaybackYears, buildCashflows } from './finance'
+import { computeNPV, computeIRR, computePaybackYears, computeDiscountedPaybackYears, buildCashflows } from './finance'
 
 /**
  * Apply a compound annual escalator to a price. Returns the price `yearsAhead`
@@ -37,6 +37,8 @@ export interface RetrofitCostAnalysis {
   paybackYears: number | null
   currency: string | null
   missingPrices: Carrier[]
+  /** Embodied carbon kgCO₂e — one-time hit at install year. */
+  embodiedCarbonKg: number
 }
 
 function carriersInDelta(delta: Partial<Record<Carrier, number>>): Carrier[] {
@@ -99,6 +101,7 @@ export function analyseRetrofitCost(
     paybackYears,
     currency,
     missingPrices,
+    embodiedCarbonKg: retrofit.cost?.embodied_carbon_kg ?? 0,
   }
 }
 
@@ -107,6 +110,8 @@ export interface ScenarioCostSummary {
   totalCapex: number
   totalAnnualSavings: number | null
   averagePaybackYears: number | null
+  /** Discounted payback (years), using the supplied discount rate. */
+  discountedPaybackYears: number | null
   currency: string | null
   hasMissingPrices: boolean
   /** NPV of the combined cashflow at the supplied discount rate. Null if savings null. */
@@ -117,6 +122,8 @@ export interface ScenarioCostSummary {
   discountRatePct: number
   /** Horizon (years) over which NPV/IRR were computed. */
   horizonYears: number
+  /** Total embodied carbon (kgCO₂e) across all retrofits in the scenario. */
+  totalEmbodiedCarbonKg: number
 }
 
 export interface FinanceParams {
@@ -162,6 +169,7 @@ export function analyseScenarioCost(
 
   let npv: number | null = null
   let irr: number | null = null
+  let discountedPaybackYears: number | null = null
   if (totalAnnualSavings !== null && perRetrofit.length > 0) {
     const startYear = ordered[0].year
     // Build a per-year cashflow array indexed from the first retrofit's year.
@@ -180,13 +188,22 @@ export function analyseScenarioCost(
     }
     npv = computeNPV(cashflows, discountRatePct)
     irr = computeIRR(cashflows)
+    if (totalAnnualSavings > 0 && totalCapex > 0) {
+      // Build a flat-from-year-1 savings stream (sum of all retrofits' savings,
+      // escalated, indexed from the first install year).
+      const annualStream: number[] = []
+      for (let t = 1; t < totalYears; t++) annualStream.push(cashflows[t])
+      discountedPaybackYears = computeDiscountedPaybackYears(totalCapex, annualStream, discountRatePct)
+    }
   }
 
+  const totalEmbodiedCarbonKg = perRetrofit.reduce((s, r) => s + r.embodiedCarbonKg, 0)
+
   return {
-    perRetrofit, totalCapex, totalAnnualSavings, averagePaybackYears, currency,
-    hasMissingPrices, npv, irr, discountRatePct, horizonYears,
+    perRetrofit, totalCapex, totalAnnualSavings, averagePaybackYears, discountedPaybackYears, currency,
+    hasMissingPrices, npv, irr, discountRatePct, horizonYears, totalEmbodiedCarbonKg,
   }
 }
 
 // Re-export for the test file
-export { computeNPV, computeIRR, computePaybackYears, buildCashflows }
+export { computeNPV, computeIRR, computePaybackYears, computeDiscountedPaybackYears, buildCashflows }

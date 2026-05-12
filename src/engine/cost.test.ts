@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { escalatePrice, analyseRetrofitCost, analyseScenarioCost } from './cost'
-import { computeNPV, computeIRR, computePaybackYears } from './finance'
+import { computeNPV, computeIRR, computePaybackYears, computeDiscountedPaybackYears } from './finance'
 import type { Asset, Retrofit } from './types'
 
 const baseAsset: Pick<Asset, 'energy' | 'utility_prices' | 'reporting_year'> = {
@@ -208,5 +208,68 @@ describe('computePaybackYears', () => {
 
   test('returns null when capex is never recovered', () => {
     expect(computePaybackYears(1000, [50, 50, 50])).toBeNull()
+  })
+})
+
+describe('computeDiscountedPaybackYears', () => {
+  test('zero discount → matches simple payback', () => {
+    const simple = computePaybackYears(300, [100, 100, 100, 100, 100])
+    const discounted = computeDiscountedPaybackYears(300, [100, 100, 100, 100, 100], 0)
+    expect(discounted).toBeCloseTo(simple!, 5)
+  })
+
+  test('positive discount → discounted payback is later than simple', () => {
+    const simple = computePaybackYears(300, [100, 100, 100, 100, 100])!
+    const discounted = computeDiscountedPaybackYears(300, [100, 100, 100, 100, 100], 8)!
+    expect(discounted).toBeGreaterThan(simple)
+  })
+
+  test('returns null when discounted savings never reach capex', () => {
+    // $50/yr × 10 yrs at 10% discount: total PV ≈ 307. Capex 1000 won't recover.
+    expect(computeDiscountedPaybackYears(1000, Array(10).fill(50), 10)).toBeNull()
+  })
+
+  test('handles zero capex by returning null', () => {
+    expect(computeDiscountedPaybackYears(0, [100, 100, 100], 5)).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Embodied carbon — flows through analyseRetrofitCost + analyseScenarioCost
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('embodied carbon', () => {
+  function withEmbodied(year: number, embodiedKg: number): Retrofit {
+    return {
+      ...ledRetrofit(year),
+      cost: { capex_total: 100_000, currency: 'USD', embodied_carbon_kg: embodiedKg },
+    }
+  }
+
+  test('per-retrofit analysis carries embodiedCarbonKg through', () => {
+    const r = analyseRetrofitCost(baseAsset, withEmbodied(2024, 5_000), [])
+    expect(r.embodiedCarbonKg).toBe(5_000)
+  })
+
+  test('missing embodied_carbon_kg defaults to 0', () => {
+    const r = analyseRetrofitCost(baseAsset, ledRetrofit(2024), [])
+    expect(r.embodiedCarbonKg).toBe(0)
+  })
+
+  test('scenario summary sums embodied across retrofits', () => {
+    const summary = analyseScenarioCost(baseAsset, [
+      withEmbodied(2026, 5_000),
+      withEmbodied(2028, 12_500),
+    ])
+    expect(summary.totalEmbodiedCarbonKg).toBe(17_500)
+  })
+
+  test('embodied is independent of operational cost analysis', () => {
+    // High embodied shouldn't change capex / savings / payback
+    const a = analyseRetrofitCost(baseAsset, withEmbodied(2024, 0), [])
+    const b = analyseRetrofitCost(baseAsset, withEmbodied(2024, 999_999), [])
+    expect(a.annualSavings).toBe(b.annualSavings)
+    expect(a.paybackYears).toBe(b.paybackYears)
+    expect(a.capex).toBe(b.capex)
   })
 })

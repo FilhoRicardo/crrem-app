@@ -27,6 +27,16 @@ export interface RetrofitCost {
   capex_per_m2?: number
   capex_per_kwp?: number
   currency?: string
+  /**
+   * One-time embodied carbon footprint of the retrofit, kgCO₂e.
+   * Counts manufacturing + transport + installation emissions.
+   * Hits the carbon ledger in the retrofit's installation year as a one-shot;
+   * does not affect operational emissions thereafter.
+   *
+   * CRREM v2.05 is operational-only; embodied is a CRREM-adjacent enhancement
+   * commonly required by SBTi / regulatory disclosure regimes.
+   */
+  embodied_carbon_kg?: number
 }
 
 export interface Retrofit {
@@ -215,6 +225,7 @@ export interface ECM {
     capex_per_kwp_low?: number
     capex_per_kwp_typical?: number
     capex_per_kwp_high?: number
+    embodied_carbon_kg_per_m2?: number
   }
   payback_years_range?: [number, number]
   notes?: string

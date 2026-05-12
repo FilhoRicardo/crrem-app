@@ -98,13 +98,29 @@ function RetrofitCard({ retrofit, ecms, onChange, onRemove, readOnly }: CardProp
           className="flex-1 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
           placeholder="Retrofit name"
         />
-        <input
-          type="number"
-          value={retrofit.cost?.capex_total ?? 0}
-          onChange={e => onChange({ ...retrofit, cost: { ...(retrofit.cost ?? {}), capex_total: Number(e.target.value), currency: retrofit.cost?.currency ?? 'USD' } })}
-          className="w-32 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
-          placeholder="Capex"
-        />
+        <label className="text-xs text-slate-500 flex items-center gap-1.5">
+          Capex
+          <input
+            type="number"
+            value={retrofit.cost?.capex_total ?? 0}
+            onChange={e => onChange({ ...retrofit, cost: { ...(retrofit.cost ?? {}), capex_total: Number(e.target.value), currency: retrofit.cost?.currency ?? 'USD' } })}
+            className="w-28 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
+            placeholder="0"
+          />
+        </label>
+        <label
+          className="text-xs text-slate-500 flex items-center gap-1.5"
+          title="One-time embodied carbon footprint of the retrofit (kgCO₂e). Counts manufacturing + transport + installation. Hits the carbon ledger in the install year."
+        >
+          Embodied (kgCO₂e)
+          <input
+            type="number"
+            value={retrofit.cost?.embodied_carbon_kg ?? 0}
+            onChange={e => onChange({ ...retrofit, cost: { ...(retrofit.cost ?? {}), embodied_carbon_kg: Number(e.target.value), currency: retrofit.cost?.currency ?? 'USD' } })}
+            className="w-28 px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-crrem-navy"
+            placeholder="0"
+          />
+        </label>
       </div>
       <div className="space-y-2">
         {retrofit.impacts.map((imp, i) => (
