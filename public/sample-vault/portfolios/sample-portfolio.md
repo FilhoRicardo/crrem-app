@@ -2,22 +2,26 @@
 doc_type: portfolio
 portfolio_schema: "1.0"
 id: sample-portfolio
-name: CRREM Reference Portfolio
+name: Global Reference Portfolio
 asset_ids:
   - midtown-tower
   - pacific-plaza-mall
   - northgate-quarter
   - eastfield-logistics-park
+  - lichtenberg-tower
 weighting: gia
+scenario_overrides:
+  midtown-tower: midtown-led-and-heatpump
+  pacific-plaza-mall: pacific-plaza-electrify
+  northgate-quarter: northgate-aggressive
+  eastfield-logistics-park: eastfield-pv-expansion
+  lichtenberg-tower: lichtenberg-deep-decarb
 ---
 
-# CRREM Reference Portfolio
+# Global Reference Portfolio
 
-The four worked-example assets from the CRREM Reference Implementations library, rolled up GIA-weighted (56,500 m² total). Reproduces the published portfolio outputs exactly:
+The full sample vault rolled up — all 5 assets, ~74,500 m² total GIA, GIA-weighted. The four CRREM worked examples (Midtown / Pacific Plaza / Northgate / Eastfield) plus the Berlin full-feature showcase.
 
-- Carbon intensity 2024: **66.08 kgCO₂e/m²**
-- Pathway 2024: **98.60 kgCO₂e/m²**
-- Misalignment year (CO₂): **2034**
-- Misalignment year (EUI): **2028**
+`scenario_overrides` pin each asset to its mid-ambition retrofit plan. Switch to **Compare scenarios** on each asset, or use the per-row scenario picker in the Portfolio table to swap any asset to its do-nothing or deep-retrofit alternative.
 
-Source: [worked-examples-fixtures-v1.0.json](https://crrem.org/library/reference-implementations/)
+The portfolio chart shows the GIA-weighted CI vs the GIA-weighted CRREM pathway — every asset's individual climate adjustment, renewable degradation, actuals, and retrofits flow into the rollup automatically.

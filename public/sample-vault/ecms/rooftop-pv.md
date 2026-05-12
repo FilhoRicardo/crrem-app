@@ -6,8 +6,8 @@ name: Rooftop PV Array
 category: Renewables
 version: "1.0"
 license: CC-BY-4.0
-summary: On-site solar PV mounted on the building roof. Output is consumed first, with surplus exported.
-applicability: Buildings with unobstructed roof area and grid export capability.
+summary: On-site solar PV mounted on the building roof. Output is consumed first; surplus exported.
+applicability: Buildings with unobstructed roof area and grid export capability. Best on warehouse / retail / industrial.
 impacts:
   - carrier: Renew_Consumed
     operation: add
@@ -27,9 +27,10 @@ cost:
   capex_per_kwp_low: 1000
   capex_per_kwp_typical: 1400
   capex_per_kwp_high: 1900
+  embodied_carbon_kg_per_m2: 4.0   # ~300 kgCO₂e per kWp installed, distributed over ~75 m²
   currency: USD
 payback_years_range: [8, 15]
-notes: Inverter replacement at 10–15 yr should be reserved as opex.
+notes: Inverter replacement at 10–15yr should be reserved as opex. Pair with `renewable_degradation_pct_per_year: 0.5` on the asset for realistic ageing.
 ---
 
 # Rooftop PV Array
