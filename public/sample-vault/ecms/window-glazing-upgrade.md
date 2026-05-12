@@ -35,7 +35,9 @@ cost:
   embodied_carbon_kg_per_m2: 12.0   # glass + aluminium frame
   currency: USD
 payback_years_range: [12, 25]
-notes: Windows last 30+ yr — no `lifetime_years` needed. Often paired with envelope insulation; the two cover the full envelope upgrade.
+notes: |
+  Windows last 30+ yr — no `lifetime_years` needed. Often paired with
+  envelope insulation; the two cover the full envelope upgrade.
 ---
 
 # Window Glazing Upgrade

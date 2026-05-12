@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { applyClimateAdjustment, projectTrajectory } from './calculate'
-import { getClimateFactors, hasClimateData } from './providers'
+import { getClimateFactors, hasClimateData, efProvider, pathwayProvider } from './providers'
 import type { EnergyMap } from './types'
 
 const staticEF = (): import('./types').EFProvider =>
@@ -101,6 +101,40 @@ describe('getClimateFactors', () => {
 
   test('returns null for countries without climate data', () => {
     expect(getClimateFactors('USA', 2050, 'rcp45')).toBeNull()
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Sub-national region fallback (the AUS6 / NYSTc problem)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('sub-national region fallback', () => {
+  test('AUS6 pathway falls back to Australia country-level data', () => {
+    const p = pathwayProvider('AUS6', 'Distribution Warehouse Warm', 2024)
+    expect(p.carbon_kgco2e_m2).toBeGreaterThan(0)
+    expect(p.eui_kwh_m2).toBeGreaterThan(0)
+  })
+
+  test('AUS6 grid EF falls back to a real Australian EF (parsed or static)', () => {
+    const ef = efProvider('Elec_Grid', 'AUS6', 2024)
+    // CRREM v2.05 ships Australia at the sub-region level; our fallback chain
+    // resolves AUS6 → Australia (parent) and either picks up a v2.05-derived
+    // Australia EF (typically 0.5–0.7 kgCO₂e/kWh) or the static fallback (0.66).
+    expect(ef).toBeGreaterThan(0.4)
+    expect(ef).toBeLessThan(0.9)
+  })
+
+  test('AUS6 grid EF in 2050 is meaningfully lower than 2024 (decarb trajectory)', () => {
+    const ef2024 = efProvider('Elec_Grid', 'AUS6', 2024)
+    const ef2050 = efProvider('Elec_Grid', 'AUS6', 2050)
+    expect(ef2050).toBeLessThan(ef2024)
+  })
+
+  test('USA NYSTc-style sub-national codes still resolve via parent USA', () => {
+    // The pathway sheet has USA sub-regions directly so this is mostly a no-op,
+    // but the fallback should not regress for USA.
+    const p = pathwayProvider('NYSTc_Mixed mild_4A', 'Office', 2024)
+    expect(p.carbon_kgco2e_m2).toBeCloseTo(35.06, 1)
   })
 })
 

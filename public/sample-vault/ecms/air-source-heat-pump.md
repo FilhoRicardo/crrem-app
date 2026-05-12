@@ -33,7 +33,10 @@ cost:
   embodied_carbon_kg_per_m2: 9.0    # refrigerants + steel + concrete pads
   currency: USD
 payback_years_range: [10, 25]
-notes: The single biggest decarbonisation lever for fossil-heated buildings. Pair with envelope upgrades to size correctly. Heat pump lifetime ~15yr — set `lifetime_years: 15` on the retrofit for replacement modelling.
+notes: |
+  The single biggest decarbonisation lever for fossil-heated buildings.
+  Pair with envelope upgrades to size correctly. Heat pump lifetime ~15yr —
+  set `lifetime_years: 15` on the retrofit for replacement modelling.
 ---
 
 # Air-Source Heat Pump

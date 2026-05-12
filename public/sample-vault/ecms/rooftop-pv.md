@@ -30,7 +30,9 @@ cost:
   embodied_carbon_kg_per_m2: 4.0   # ~300 kgCO₂e per kWp installed, distributed over ~75 m²
   currency: USD
 payback_years_range: [8, 15]
-notes: Inverter replacement at 10–15yr should be reserved as opex. Pair with `renewable_degradation_pct_per_year: 0.5` on the asset for realistic ageing.
+notes: |
+  Inverter replacement at 10–15yr should be reserved as opex. Pair with
+  `renewable_degradation_pct_per_year: 0.5` on the asset for realistic ageing.
 ---
 
 # Rooftop PV Array

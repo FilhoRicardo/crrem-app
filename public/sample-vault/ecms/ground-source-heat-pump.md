@@ -31,7 +31,10 @@ cost:
   embodied_carbon_kg_per_m2: 20.0   # boreholes + copper + refrigerants
   currency: USD
 payback_years_range: [15, 30]
-notes: Boreholes last 50+ yr, plant ~25yr. Use `lifetime_years: 25` on the retrofit. Best paired with a long-horizon CRREM analysis where the deep CO₂ reductions justify the capex.
+notes: |
+  Boreholes last 50+ yr, plant ~25yr. Use `lifetime_years: 25` on the retrofit.
+  Best paired with a long-horizon CRREM analysis where the deep CO₂
+  reductions justify the capex.
 ---
 
 # Ground-Source Heat Pump

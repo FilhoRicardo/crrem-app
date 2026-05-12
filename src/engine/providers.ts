@@ -91,6 +91,32 @@ function canonCountry(country: string): string {
   return COUNTRY_ALIASES[country] ?? country
 }
 
+/**
+ * Map a CRREM sub-national region code back to its parent country.
+ *
+ * Some sub-national regions (USA NYSTc_*, AUS1..AUS8, Canadian provinces)
+ * have postal-code lookup entries but the v2.05 pathway / EF data may only
+ * be published at country-level for some regions (Australia is the obvious
+ * one — postal lookup gives AUS6 but pathway/EF data is keyed by "Australia"
+ * with sub-region EF entries by NCC zone).
+ *
+ * Used as a final fallback when an exact sub-national lookup misses.
+ */
+const SUBNATIONAL_PARENT: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  // Australia — postal lookup returns AUS1 .. AUS8
+  for (let i = 1; i <= 8; i++) m[`AUS${i}`] = 'Australia'
+  return m
+})()
+
+function parentCountryOf(region: string): string | null {
+  if (SUBNATIONAL_PARENT[region]) return SUBNATIONAL_PARENT[region]
+  // USA pathway codes look like "NYSTc_Mixed mild_4A" — first underscore-segment
+  // is a sub-national identifier; canonical country is "USA".
+  if (/^[A-Z]{3,5}c_/.test(region)) return 'USA'
+  return null
+}
+
 function postalResolve(country: string, postalCode: string | undefined): string | null {
   if (!postalCode) return null
   const c = canonCountry(country)
@@ -152,16 +178,37 @@ function lookupGridEF(region: string, year: number): number | null {
   // Exact match first
   let curve = GRID_EFS[region]
   if (!curve) {
-    // Try sub-national → country fallback
-    // Strip everything after the first underscore (e.g. "AUS6" stays, "NYSTc_Mixed mild_4A" → "NYSTc")
-    // Also try just removing any trailing climate-zone suffix.
-    const stripped = region.split('_')[0]
-    if (stripped !== region && GRID_EFS[stripped]) {
-      curve = GRID_EFS[stripped]
+    // Sub-national → country fallback — same chain as pathway resolution.
+    // For Australia we rely on the static AU fallback below since the v2.05 EF
+    // sheet stores Australia per NCC subregion (no country aggregate).
+    const explicitParent = parentCountryOf(region)
+    const candidates = [
+      explicitParent,
+      region.split('_')[0],
+    ].filter((s): s is string => !!s && s !== region && s !== region.split('_')[0])
+    for (const c of candidates) {
+      if (GRID_EFS[c]) { curve = GRID_EFS[c]; break }
     }
   }
   if (!curve) return null
   return interpYear(curve.years, curve.values, year)
+}
+
+// Country-level grid EF defaults for countries the v2.05 EF sheet stores only
+// at sub-region granularity. Sourced from CRREM A-001..A-004 worked-example
+// fixtures (NSW = AUS6 ≈ 0.66 → declines to ~0.05 by 2050; representative of
+// the Australia coal/gas-heavy grid trajectory).
+const STATIC_COUNTRY_GRID_EFS: Record<string, GridCurve> = {
+  Australia: {
+    years: [2024, 2030, 2035, 2040, 2045, 2050],
+    values: [0.66, 0.50, 0.35, 0.22, 0.12, 0.05],
+  },
+}
+function staticCountryGridEF(region: string, year: number): number | null {
+  const explicitParent = parentCountryOf(region)
+  const c = STATIC_COUNTRY_GRID_EFS[region] ?? (explicitParent ? STATIC_COUNTRY_GRID_EFS[explicitParent] : undefined)
+  if (!c) return null
+  return interpYear(c.years, c.values, year)
 }
 
 function interpYear(years: number[], values: number[], year: number): number {
@@ -195,6 +242,9 @@ export const efProvider: EFProvider = (carrier, region, year) => {
   if (carrier === 'Elec_Grid') {
     const v = lookupGridEF(region, year)
     if (v !== null) return v
+    // Country-level static fallback (handles Australia where v2.05 has only sub-regions)
+    const staticV = staticCountryGridEF(region, year)
+    if (staticV !== null) return staticV
     // Generic decline: 0.30 in 2024, 4%/yr decay, floored at 0.02.
     if (region) unknownGridRegions.add(region)
     const yrs = Math.max(0, year - 2024)
@@ -212,11 +262,14 @@ function lookupPathway(region: string, propertyType: string, year: number): Path
   let bucket = PATHWAYS[region]
   if (!bucket) {
     // Try sub-national → country fallback (e.g. AUS6 → Australia)
-    // by stripping a numeric/code suffix or any text after an underscore.
+    // 1. Explicit parent map (most reliable — handles AUS sub-codes + USA NYSTc_*)
+    // 2. Trim trailing digits / underscore-prefix (heuristic last-resort)
+    const explicitParent = parentCountryOf(region)
     const candidates = [
+      explicitParent,
       region.replace(/\d+$/, '').replace(/_+$/, ''),
       region.split('_')[0],
-    ].filter(s => s && s !== region)
+    ].filter((s): s is string => !!s && s !== region)
     for (const c of candidates) {
       if (PATHWAYS[c]) {
         bucket = PATHWAYS[c]
